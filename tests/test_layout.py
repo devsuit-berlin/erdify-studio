@@ -116,6 +116,21 @@ def test_save_does_not_overwrite_a_broken_file(tmp_path: Path, content: str) -> 
     assert path.read_text() == content
 
 
+def test_save_does_not_overwrite_a_file_that_is_not_utf8(tmp_path: Path) -> None:
+    path = tmp_path / "erdify-layout.json"
+    path.write_bytes(b"\xe4\xf6")
+    with pytest.raises(LayoutError, match="not overwriting .*not UTF-8"):
+        save_layout(_layout(), path)
+    assert path.read_bytes() == b"\xe4\xf6"
+
+
+def test_save_overwrites_an_empty_file(tmp_path: Path) -> None:
+    path = tmp_path / "erdify-layout.json"
+    path.write_text("\n")
+    save_layout(_layout(), path)
+    assert path.read_text() == EXPECTED
+
+
 @pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits")
 def test_save_keeps_the_file_permissions(tmp_path: Path) -> None:
     path = tmp_path / "erdify-layout.json"
@@ -194,6 +209,8 @@ def test_missing_file_raises_file_not_found(tmp_path: Path) -> None:
         ("[]", "must be a JSON object"),
         ('{"diagrams": {}}', "no 'version'"),
         ('{"version": "1", "diagrams": {}}', "version '1'"),
+        ('{"version": 1.0, "diagrams": {}}', "version 1.0"),
+        ('{"version": true, "diagrams": {}}', "version True"),
         ('{"version": 1}', "'diagrams' must be an object"),
         ('{"version": 1, "diagrams": []}', "'diagrams' must be an object"),
         ('{"version": 1, "diagrams": {}, "extra": 1}', "unknown key 'extra'"),

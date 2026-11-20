@@ -20,8 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are an error naming both. A file of an unknown `version` is refused and never
   overwritten, and neither is a file that is not a valid layout (e.g. with git
   conflict markers): its positions would be lost. Python API: `Layout`, `Position`,
-  `load_layout` / `loads_layout`, `save_layout` / `dumps_layout`, `entity_keys`,
-  `enum_key`, `entity_groups`, `load_config`, `StudioConfig`, `GroupBy`, the diagram
+  `load_layout` / `loads_layout`, `save_layout` / `dumps_layout`, `entity_key`,
+  `entity_keys`, `enum_key`, `entity_groups`, `load_config`, `StudioConfig`, `GroupBy`, the diagram
   names `OVERVIEW` / `DEFAULT_GROUP`, `LAYOUT_VERSION`, and the errors `StudioError`,
   `ConfigError`, `LayoutError`, `LayoutVersionError`, `DuplicateKeyError`.
 - `[tool.erdify-studio]` in `pyproject.toml`: `layout` (default `erdify-layout.json`

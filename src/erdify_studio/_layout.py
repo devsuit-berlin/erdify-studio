@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
+import secrets
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -169,28 +169,37 @@ def save_layout(layout: Layout, path: Path) -> None:
     """
     text = dumps_layout(layout)
     try:
-        mode = path.stat().st_mode & 0o777
+        mode: int | None = path.stat().st_mode & 0o777
     except FileNotFoundError:
-        mode = _default_mode()
+        mode = None  # new file: the temp file gets the umask, like any new file
     else:
-        try:
-            load_layout(path)
-        except LayoutVersionError:
-            raise
-        except LayoutError as e:
-            raise LayoutError(
-                f"not overwriting {str(path)!r}, it is not a valid layout: {e}"
-            ) from e
+        _refuse_to_lose_positions(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    tmp = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
             f.write(text)
-        os.chmod(tmp, mode)
+        if mode is not None:
+            os.chmod(tmp, mode)
         os.replace(tmp, path)
     except BaseException:
-        Path(tmp).unlink(missing_ok=True)
+        tmp.unlink(missing_ok=True)
         raise
+
+
+def _refuse_to_lose_positions(path: Path) -> None:
+    """Raise unless replacing the existing ``path`` loses nothing."""
+    try:
+        if not path.read_text(encoding="utf-8-sig").strip():
+            return  # an empty file (e.g. from `touch`) holds no positions
+        load_layout(path)
+    except LayoutVersionError:
+        raise
+    except LayoutError as e:
+        raise LayoutError(f"not overwriting {str(path)!r}, it is not a valid layout: {e}") from e
+    except UnicodeDecodeError as e:
+        raise LayoutError(f"not overwriting {str(path)!r}, it is not UTF-8: {e}") from e
 
 
 class _DuplicateKey(Exception):
@@ -211,17 +220,11 @@ def _check_version(data: dict[str, object], source: str) -> None:
     if "version" not in data:
         raise LayoutError(f"{source} has no 'version'")
     version = data["version"]
-    if version != LAYOUT_VERSION or isinstance(version, bool):
+    if type(version) is not int or version != LAYOUT_VERSION:
         raise LayoutVersionError(
             f"layout file version {version!r} in {source}: this erdify-studio supports "
             f"{LAYOUT_VERSION}; upgrade erdify-studio to read it"
         )
-
-
-def _default_mode() -> int:
-    umask = os.umask(0)
-    os.umask(umask)
-    return 0o666 & ~umask
 
 
 def _is_position(value: object) -> bool:

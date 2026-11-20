@@ -3,7 +3,7 @@
 from importlib.metadata import PackageNotFoundError, version
 
 from erdify_studio._config import GroupBy, StudioConfig, load_config
-from erdify_studio._entities import entity_groups, entity_keys, enum_key
+from erdify_studio._entities import entity_groups, entity_key, entity_keys, enum_key
 from erdify_studio._errors import (
     ConfigError,
     DuplicateKeyError,
@@ -44,6 +44,7 @@ __all__ = [
     "__version__",
     "dumps_layout",
     "entity_groups",
+    "entity_key",
     "entity_keys",
     "enum_key",
     "load_config",
