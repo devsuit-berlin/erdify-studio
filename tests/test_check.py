@@ -357,6 +357,20 @@ def test_cli_errors_exit_two(
     assert HINT not in err
 
 
+def test_cli_parse_error_exits_two_without_hint(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Without strict, erdify would skip the file and every position would read stale.
+    save_layout(_complete(), project / "erdify-layout.json")
+    (project / "extra").mkdir()
+    (project / "extra" / "models.py").write_text("class Broken(:\n")
+    assert main(["check"]) == 2
+    err = capsys.readouterr().err
+    assert "erdify-studio: error: " in err
+    assert "stale entry" not in err
+    assert HINT not in err
+
+
 def test_cli_missing_path_exits_two(project: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["check", "no-such-dir"]) == 2
     assert "erdify-studio: error:" in capsys.readouterr().err

@@ -129,7 +129,9 @@ def check_project(project: Project, config: StudioConfig) -> list[Problem] | Non
     tell which enums it draws (erdify#369).
 
     Args:
-        project: The project as ``erdify.load_project`` returns it.
+        project: The project as ``erdify.load_project`` returns it; load it with
+            ``strict=True``, else a file erdify cannot parse drops its tables and
+            their positions are reported stale.
         config: Its studio settings (``load_config(project.settings.pyproject)``).
 
     Returns:

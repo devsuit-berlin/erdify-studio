@@ -29,9 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   has no position in its diagram, the layout file has stale entries or diagrams, or
   the layout file is missing or empty; the last line suggests `erdify-studio place
   --auto`. Exits 0 without output when the layout is up to date, 2 when the project,
-  config or layout file cannot be read, or erdify finds no entities (unless
-  `allow_empty`), and on an internal error (with its traceback). Positions of existing
-  enums are kept but not required yet (erdify#369). A pre-commit hook
+  config, a model file or the layout file cannot be read, or erdify finds no entities
+  (unless `allow_empty`), and on an internal error (with its traceback). Positions of
+  existing enums are kept but not required yet (erdify#369). A pre-commit hook
   `erdify-studio-check` runs it. Python API: `check_project`, `Problem`,
   `ProblemKind`, `ProjectError`.
 - `[tool.erdify-studio]` in `pyproject.toml`: `layout` (default `erdify-layout.json`

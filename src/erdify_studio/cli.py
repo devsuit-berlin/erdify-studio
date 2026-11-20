@@ -86,7 +86,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _check(path: Path) -> int:
-    project = erdify.load_project(path)
+    # strict: a file erdify cannot parse would otherwise drop its tables, and their
+    # positions would read as stale entries that `place --auto` deletes.
+    project = erdify.load_project(path, strict=True)
     config = load_config(project.settings.pyproject)
     problems = check_project(project, config)
     shown = _display(config.layout)
