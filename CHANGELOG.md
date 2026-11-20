@@ -24,6 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `entity_keys`, `enum_key`, `entity_groups`, `load_config`, `StudioConfig`, `GroupBy`, the diagram
   names `OVERVIEW` / `DEFAULT_GROUP`, `LAYOUT_VERSION`, and the errors `StudioError`,
   `ConfigError`, `LayoutError`, `LayoutVersionError`, `DuplicateKeyError`.
+- `erdify-studio check [path]`: exits 1 with one line per problem when an entity or a
+  foreign box (an entity of another group connected by an edge, in either direction)
+  has no position in its diagram, the layout file has stale entries or diagrams, or
+  there is no layout file yet; the last line suggests `erdify-studio place --auto`.
+  Exits 0 without output when the layout is up to date, 2 when the project, config or
+  layout file cannot be read. Enums are not checked yet (erdify#369). A pre-commit
+  hook `erdify-studio-check` runs it. Python API: `diagram_contents`, `DiagramContent`,
+  `check_layout`, `Problem`, `ProblemKind`.
 - `[tool.erdify-studio]` in `pyproject.toml`: `layout` (default `erdify-layout.json`
   next to the `pyproject.toml` erdify resolves, else the working directory),
   `group_by` (`auto` | `schema` | `app` | `module` | `none`) and `export_dir`.

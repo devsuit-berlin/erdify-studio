@@ -2,6 +2,13 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
+from erdify_studio._check import (
+    DiagramContent,
+    Problem,
+    ProblemKind,
+    check_layout,
+    diagram_contents,
+)
 from erdify_studio._config import GroupBy, StudioConfig, load_config
 from erdify_studio._entities import entity_groups, entity_key, entity_keys, enum_key
 from erdify_studio._errors import (
@@ -29,6 +36,11 @@ except PackageNotFoundError:  # pragma: no cover - running from source without i
     __version__ = "0.0.0"
 
 __all__ = [
+    "diagram_contents",
+    "check_layout",
+    "ProblemKind",
+    "Problem",
+    "DiagramContent",
     "DEFAULT_GROUP",
     "LAYOUT_VERSION",
     "OVERVIEW",

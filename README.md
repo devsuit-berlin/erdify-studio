@@ -36,6 +36,34 @@ erdify-studio export [path]        # write deterministic SVGs
 Options and sources come from erdify's config (`[tool.erdify]` in `pyproject.toml`)
 plus a `[tool.erdify-studio]` section.
 
+## Check in CI
+
+```bash
+erdify-studio check [path]   # path: the input erdify reads (default: .)
+```
+
+Exits 1 with one line per problem when an entity or a foreign box (an entity of
+another group connected by a relationship) has no position in a diagram, or the
+layout file holds entries or diagrams that no longer exist; the last line suggests
+`erdify-studio place --auto`. Exits 0 without output when the layout is up to date,
+and 2 when the project, its config or the layout file cannot be read. Runs without a
+browser, Node or network.
+
+With [pre-commit](https://pre-commit.com):
+
+```yaml
+repos:
+  - repo: https://github.com/devsuit-berlin/erdify-studio
+    rev: v0.1.0
+    hooks:
+      - id: erdify-studio-check
+        args: [./src]                               # optional, default: .
+        # additional_dependencies: ['erdify[sql]']  # for SQL DDL
+```
+
+The hook runs when a `models.py`, a `.sql` file, `erdify-layout.json` or
+`pyproject.toml` changes; override `files` for other names.
+
 ## Configuration
 
 ```toml
@@ -54,6 +82,9 @@ renaming a class keeps its position.
 - SQL DDL with same-name tables in different schemas (`core.customer`, `mart.customer`)
   is read as one table by erdify for now
   ([erdify#353](https://github.com/devsuit-berlin/erdify/issues/353)).
+- `check` does not require positions for enums yet: erdify has no public API for which
+  enums it draws and which entities use them
+  ([erdify#369](https://github.com/devsuit-berlin/erdify/issues/369)).
 
 ## Contributing
 
