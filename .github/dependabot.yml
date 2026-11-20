@@ -1,0 +1,50 @@
+# Same policy as erdify: weekly grouped minor/patch updates, majors separate,
+# a 7-day cooldown before a fresh release is proposed (security updates bypass it).
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "cron"
+      cronjob: "0 2 * * 3"
+    cooldown:
+      default-days: 7
+    groups:
+      version-updates:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      security-updates:
+        applies-to: security-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+  # The frontend that is built into the wheel.
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "cron"
+      cronjob: "0 2 * * 3"
+    cooldown:
+      default-days: 7
+    groups:
+      version-updates:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      security-updates:
+        applies-to: security-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "cron"
+      cronjob: "0 2 1 * *"
+    cooldown:
+      default-days: 7
+    groups:
+      version-updates:
+        applies-to: version-updates
+        patterns: ["*"]
+        # Majors grouped too: pinned action SHAs are reviewed as one PR.
+        update-types: ["major", "minor", "patch"]

@@ -1,45 +1,88 @@
 [project]
-name = "erdify_studio"
+name = "erdify-studio"
 dynamic = ["version"]
-description = ""
+description = "Arrange erdify ERDs by drag and drop, commit the layout and check it in CI."
 readme = "README.md"
-requires-python = ">=3.13"
-license = { text = "MIT" }
-authors = [{ name = "devsuit GmbH", email = "tech@devsuit.de" }, { name = "Fabian Clemenz", email = "fabian.clemenz@devsuit.de" }]
-keywords = []
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "Operating System :: OS Independent",
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "devsuit GmbH", email = "tech@devsuit.de" },
+    { name = "Fabian Clemenz", email = "fabian.clemenz@devsuit.de" },
 ]
-dependencies = []
+keywords = ["erd", "erdify", "diagram", "layout", "database", "sqlmodel", "sqlalchemy", "django"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
+    "Topic :: Database",
+    "Topic :: Software Development :: Documentation",
+]
+# 1.7.0 is the first erdify release with the public API studio builds on
+# (EntityInfo.schema/module/app, diagram_edges, load_project).
+dependencies = ["erdify>=1.7.0,<2"]
+
+[project.optional-dependencies]
+sql = ["erdify[sql]>=1.7.0,<2"]
+
+[project.scripts]
+erdify-studio = "erdify_studio.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/devsuit-berlin/erdify-studio"
 Repository = "https://github.com/devsuit-berlin/erdify-studio"
+Changelog = "https://github.com/devsuit-berlin/erdify-studio/blob/main/CHANGELOG.md"
+Issues = "https://github.com/devsuit-berlin/erdify-studio/issues"
 
 [dependency-groups]
 dev = [
+    "mypy>=2.4",
     "poethepoet>=0.49.0",
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.17.4",
 ]
+hooks = ["pre-commit>=4.7.0"]
 
 [tool.poe.tasks]
-test = { help = "Run the test suite", cmd = "pytest -vv" }
-lint = { help = "Lint", cmd = "ruff check ." }
+test = { help = "Run the test suite with coverage", cmd = "pytest --cov=erdify_studio --cov-report=term-missing" }
+lint = { help = "Lint and type-check", sequence = [
+    { cmd = "ruff check ." },
+    { cmd = "ruff format --check ." },
+    { cmd = "mypy" },
+] }
 format = { help = "Format", cmd = "ruff format ." }
-build = { help = "Build sdist + wheel into dist/", cmd = "uv build" }
+frontend = { help = "Build the frontend into src/erdify_studio/_static", shell = "npm --prefix frontend ci --ignore-scripts --no-audit --no-fund && npm --prefix frontend run build" }
+build = { help = "Build sdist + wheel into dist/ (run `poe frontend` first)", cmd = "uv build" }
+check-wheel = { help = "Check the built wheel ships the frontend", cmd = "python scripts/check_wheel.py dist" }
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+testpaths = ["tests"]
 
 [tool.coverage.run]
-source = ["src"]
+source = ["erdify_studio"]
+
+[tool.coverage.report]
+# The 90 % gate is passed on the full run only (`poe test --cov-fail-under=90` in CI),
+# so narrowed runs (`poe test <path>`, `-k`) don't fail on partial coverage.
+show_missing = true
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+# scripts/check_instructions.py is vendored and kept as shipped.
+files = ["src", "tests", "scripts/check_wheel.py"]
 
 [tool.ruff]
 line-length = 100
 indent-width = 4
+target-version = "py311"
 
 [tool.ruff.lint]
 # devsuit baseline: pycodestyle (E/W) + pyflakes (F) + isort (I, black-compatible).
@@ -51,7 +94,7 @@ docstring-code-format = true
 exclude = ["*.md"]
 
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling>=1.27", "hatch-vcs"]  # 1.27: PEP 639 license metadata
 build-backend = "hatchling.build"
 
 # Version is derived from the latest git tag (e.g. v1.2.3) — no manual bumping.
@@ -60,3 +103,9 @@ source = "vcs"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/erdify_studio"]
+# The built frontend is gitignored (hatchling skips ignored files), so ship it explicitly.
+artifacts = ["src/erdify_studio/_static/"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["frontend/node_modules/"]
+artifacts = ["src/erdify_studio/_static/"]

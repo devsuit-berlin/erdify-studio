@@ -12,6 +12,7 @@ The lint and test commands of this project.
 | Part | Lint | Tests |
 | --- | --- | --- |
 | `src/`, `tests/` | `uv run --no-sync poe lint` | `uv run --no-sync poe test` |
+| `frontend/` | `npm --prefix frontend run typecheck` | — (no frontend tests yet) |
 
 - `--no-sync` keeps `uv run` from installing into `.venv` (a missing environment means: run `uv sync` yourself first).
 - Narrowing: Python `uv run --no-sync poe test <path>` or `uv run --no-sync poe test -k <word>` (no `--`).

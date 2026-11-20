@@ -1,0 +1,72 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+
+# Least privilege by default; the publish job adds only what it needs.
+permissions:
+  contents: read
+
+jobs:
+  # npm and Python build dependencies run here, without the OIDC token, so a
+  # compromised build dependency cannot mint a PyPI credential.
+  build:
+    name: Build the distributions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse a tag that is not vX.Y.Z
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+((a|b|rc)[0-9]+)?$ ]] \
+            || { echo "release tag '$TAG' is not vX.Y.Z" >&2; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # hatch-vcs takes the version from the release tag
+      # No caches in the release build: a cache written by another run must not
+      # end up in what is published.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "latest-known"
+          enable-cache: false
+      - name: Run the tests
+        run: uv run --frozen poe test --cov-fail-under=90
+      - name: Build the frontend
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+      - run: uv build
+      - name: Refuse a wheel without the frontend
+        run: uv run --frozen python scripts/check_wheel.py dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  publish:
+    name: Publish to PyPI
+    needs: [build]
+    runs-on: ubuntu-latest
+    # Gated environment: required reviewers + tag-only deployment (v*), as in erdify.
+    environment: pypi
+    permissions:
+      # OIDC token for PyPI Trusted Publishing - no long-lived API token.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "latest-known"
+          enable-cache: false
+      - name: Publish to PyPI
+        # No token: uv reads the OIDC credentials minted via id-token: write.
+        run: uv publish --trusted-publishing always
