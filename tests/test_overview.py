@@ -419,3 +419,20 @@ def test_save_of_an_empty_project_creates_the_file(tmp_path: Path) -> None:
     root = _project(tmp_path, models="", erdify_toml="allow_empty = true\n")
     _save(root, {})
     assert load_layout(root / "erdify-layout.json").diagrams == {OVERVIEW: {}}
+
+
+def test_box_width_fits_each_drawn_row(tmp_path: Path) -> None:
+    """Badges, name, a two-character gap, type and ``?`` for nullable fit the box."""
+    long = MODELS.replace(
+        "    email: str = Field(unique=True)\n",
+        "    email: str = Field(unique=True)\n"
+        "    referred_by_id: Optional[int] = Field(default=None, "
+        'foreign_key="core.customers.id")\n',
+    )
+    overview = _overview(_project(tmp_path, models=long))
+    char, padding = overview["metrics"]["charWidth"], overview["metrics"]["padding"]
+    box = _box(overview, "core.customers")
+    widest = max(
+        6 + len(r["name"]) + 2 + len(r["type"]) + (1 if r["nullable"] else 0) for r in box["rows"]
+    )
+    assert box["width"] - padding >= widest * char

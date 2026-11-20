@@ -11,6 +11,10 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    BoxNode: typeof import('./src/components/BoxNode.vue')['default']
+    DiagramCanvas: typeof import('./src/components/DiagramCanvas.vue')['default']
+    EdgeLine: typeof import('./src/components/EdgeLine.vue')['default']
+    UAlert: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Alert.vue')['default']
     UApp: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/App.vue')['default']
     UButton: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Button.vue')['default']
   }

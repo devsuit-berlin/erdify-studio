@@ -314,7 +314,14 @@ def _entity_sizes(project: Project) -> dict[str, _Size]:
 
 
 def _entity_box(key: str, entity: EntityInfo) -> _Size:
-    return _box(key, [f"{f.name} {f.type_str}" + " " * _MARKERS for f in entity.fields])
+    # As the canvas draws a field: badges, name, a two-character gap, type, "?" if nullable.
+    return _box(
+        key,
+        [
+            " " * _MARKERS + f"{f.name}  {f.type_str}" + ("?" if f.is_nullable else "")
+            for f in entity.fields
+        ],
+    )
 
 
 def _box(title: str, rows: Collection[str]) -> _Size:
