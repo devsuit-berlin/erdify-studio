@@ -87,6 +87,10 @@ renaming a class keeps its position.
 - `check` keeps but does not require positions for enums yet: erdify has no public API for which
   enums it draws and which entities use them
   ([erdify#369](https://github.com/devsuit-berlin/erdify/issues/369)).
+- A foreign key that names the schema (`foreign_key="core.customers.id"`) gives no
+  relationship in erdify for now, so `check` requires no foreign box for it; once erdify
+  fixes it, those foreign boxes are required
+  ([erdify#373](https://github.com/devsuit-berlin/erdify/issues/373)).
 
 ## Contributing
 
