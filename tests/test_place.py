@@ -297,6 +297,31 @@ def test_a_group_diagram_is_anchored_by_its_own_entities(tmp_path: Path) -> None
     assert result.layout.diagrams["core"]["core.customers"] == (0, 0)
 
 
+def test_foreign_boxes_go_next_to_own_entities_only(tmp_path: Path) -> None:
+    # In "core", both foreign boxes connect only through billing.invoices -> core:
+    # invoices sits next to core.customers, lines (linked to invoices) is no
+    # foreign box of core at all; with two foreign boxes each sits next to the own one.
+    models = (
+        MODELS
+        + """
+
+class Payment(SQLModel, table=True):
+    __tablename__ = "payments"
+    __table_args__ = {"schema": "billing"}
+    id: int = Field(primary_key=True)
+    customer_id: int = Field(foreign_key="customers.id")
+    invoice_id: int = Field(foreign_key="invoices.id")
+"""
+    )
+    root = _project(tmp_path, models)
+    layout = Layout()
+    layout.set_position("core", "core.customers", 1000, 1000)
+    positions = _place(root, layout).layout.diagrams["core"]
+    # Right of and below core.customers (54 high), not chained off each other.
+    assert positions["billing.invoices"] == (1000 + MIN_WIDTH + GAP, 1000)
+    assert positions["billing.payments"] == (1000, 1000 + MIN_HEIGHT + GAP)
+
+
 def test_without_relationships_new_boxes_go_to_the_grid(tmp_path: Path) -> None:
     root = _project(tmp_path, erdify="no_relationships = true\n", studio='group_by = "none"\n')
     layout = Layout()

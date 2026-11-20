@@ -246,12 +246,17 @@ def _next_to(
 def _grid_slot(
     box: _Size, origin: Position, start: int, rects: list[_Rect]
 ) -> tuple[Position, int]:
-    """The first free grid slot from ``start`` on, and its index.
+    """The first free grid slot for ``box``, and the new ``start``.
+
+    ``start`` is the first slot where the smallest box may still fit: boxes are only
+    ever added, so a slot that is taken for the smallest box stays taken for every
+    box, and the search skips it next time.
 
     Raises:
         LayoutError: The grid reaches past ``MAX_COORDINATE``.
     """
     w, h = box
+    smallest = (_MIN_WIDTH, _HEADER)
     slot = start
     while True:
         row, column = divmod(slot, GRID_COLUMNS)
@@ -261,8 +266,10 @@ def _grid_slot(
                 f"no room for a new box at {spot!r}: positions are limited to "
                 f"\u00b1{MAX_COORDINATE}; move the boxes near the limit"
             )
+        if slot == start and not _free((*spot, *smallest), rects):
+            start += 1
         if _free((*spot, w, h), rects):
-            return spot, slot
+            return spot, start
         slot += 1
 
 
