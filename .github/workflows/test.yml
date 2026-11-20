@@ -47,4 +47,4 @@ jobs:
         shell: bash
         run: uv run python -c "import os, sys; assert '%d.%d' % sys.version_info[:2] == os.environ['EXPECTED'], sys.version"
       # Coverage gate (fail_under in pyproject.toml) is part of `poe test`.
-      - run: uv run poe test
+      - run: uv run --frozen poe test

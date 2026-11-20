@@ -17,7 +17,9 @@ public Python API, so erdify's security model applies to the parsing step: no co
 from the files it reads is executed or imported, no database connection is opened.
 See [erdify's security policy](https://github.com/devsuit-berlin/erdify/blob/main/SECURITY.md).
 
-On top of that, erdify-studio:
+On top of that, erdify-studio is designed to follow these rules. The UI, `check`,
+`place --auto` and `export` are not released yet (see the README); the rules below are
+what they must keep, and a release that breaks one is a vulnerability:
 
 - serves its browser UI from a local server bound to **127.0.0.1 only** — it is not
   reachable from other machines;

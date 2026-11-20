@@ -9,14 +9,11 @@ permissions:
   contents: read
 
 jobs:
-  publish:
-    name: Publish to PyPI
+  # npm and Python build dependencies run here, without the OIDC token, so a
+  # compromised build dependency cannot mint a PyPI credential.
+  build:
+    name: Build the distributions
     runs-on: ubuntu-latest
-    # Gated environment: required reviewers + tag-only deployment (v*), as in erdify.
-    environment: pypi
-    permissions:
-      # OIDC token for PyPI Trusted Publishing - no long-lived API token.
-      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -37,6 +34,29 @@ jobs:
       - run: uv build
       - name: Refuse a wheel without the frontend
         run: uv run --frozen python scripts/check_wheel.py dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  publish:
+    name: Publish to PyPI
+    needs: [build]
+    runs-on: ubuntu-latest
+    # Gated environment: required reviewers + tag-only deployment (v*), as in erdify.
+    environment: pypi
+    permissions:
+      # OIDC token for PyPI Trusted Publishing - no long-lived API token.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "latest-known"
       - name: Publish to PyPI
         # No token: uv reads the OIDC credentials minted via id-token: write.
         run: uv publish --trusted-publishing always

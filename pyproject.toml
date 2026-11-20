@@ -93,7 +93,7 @@ docstring-code-format = true
 exclude = ["*.md"]
 
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling>=1.27", "hatch-vcs"]  # 1.27: PEP 639 license metadata
 build-backend = "hatchling.build"
 
 # Version is derived from the latest git tag (e.g. v1.2.3) — no manual bumping.

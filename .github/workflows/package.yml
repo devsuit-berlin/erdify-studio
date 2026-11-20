@@ -43,6 +43,13 @@ jobs:
             if command -v node; then echo "node must not be on PATH" >&2; exit 1; fi
             erdify-studio --help
             erdify-studio --version'
+      - name: The sql extra pulls in erdify[sql]
+        shell: bash
+        run: |
+          uv venv /tmp/sql-env
+          wheel=$(ls dist/*.whl)
+          VIRTUAL_ENV=/tmp/sql-env uv pip install "${wheel}[sql]"
+          /tmp/sql-env/bin/python -c "import sqlglot; print('sqlglot', sqlglot.__version__)"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
