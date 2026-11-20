@@ -19,3 +19,7 @@ class LayoutVersionError(LayoutError):
 
 class DuplicateKeyError(LayoutError):
     """Two entities map to the same layout key."""
+
+
+class ProjectError(StudioError):
+    """A project studio cannot lay out, e.g. one without entities."""

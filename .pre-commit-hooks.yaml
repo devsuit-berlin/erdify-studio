@@ -1,0 +1,25 @@
+# Hooks consumers get by pointing pre-commit at this repository:
+#
+#   repos:
+#     - repo: https://github.com/devsuit-berlin/erdify-studio
+#       rev: v0.1.0
+#       hooks:
+#         - id: erdify-studio-check
+#           args: [./src]   # the input erdify reads; default: the repository root
+#
+# The hook runs when a models.py, a .sql file, the layout file or pyproject.toml
+# changes; override `files` if your models or layout live elsewhere. For SQL DDL
+# add `additional_dependencies: ['erdify[sql]']`. Deleting a file does not trigger
+# pre-commit hooks: also run `erdify-studio check` in CI.
+
+- id: erdify-studio-check
+  name: Check erdify-studio layout is up to date
+  description: >-
+    Fail when the committed erdify-studio layout misses a position or holds stale
+    entries, without rewriting it. `check` is part of the entry point, so it cannot
+    be dropped by overriding `args`.
+  entry: erdify-studio check
+  language: python
+  pass_filenames: false
+  always_run: false
+  files: (^|/)(models\.py|erdify-layout\.json|pyproject\.toml)$|\.sql$
