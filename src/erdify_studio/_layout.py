@@ -167,6 +167,23 @@ def load_layout(path: Path) -> Layout:
     return loads_layout(_read(path), source=str(path))
 
 
+def load_existing_layout(path: Path) -> Layout | None:
+    """The layout at ``path``; None when there is none yet (no file, or an empty one).
+
+    Raises:
+        LayoutVersionError: The file is of another ``version``.
+        LayoutError: The file cannot be read or is not a valid layout.
+    """
+    try:
+        if not path.read_text(encoding="utf-8-sig").strip():
+            return None
+    except FileNotFoundError:
+        return None
+    except (OSError, UnicodeDecodeError):
+        pass  # load_layout reports it as a LayoutError
+    return load_layout(path)
+
+
 def save_layout(layout: Layout, path: Path) -> None:
     """Write ``layout`` to ``path``, creating missing folders.
 

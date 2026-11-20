@@ -70,6 +70,27 @@ The hook runs when a `models.py`, a `.sql` file, `erdify-layout.json` or
 trigger pre-commit hooks, so also run `erdify-studio check` (or
 `pre-commit run --all-files`) in CI.
 
+## Place new tables without the canvas
+
+```bash
+erdify-studio place --auto [path]
+```
+
+Fixes what `check` reports, without opening the browser:
+
+- An entity or foreign box without a position goes next to a placed box it has a
+  relationship with (right, below, left or above — the first free spot), otherwise into
+  the first free slot of a grid right of the diagram.
+- Boxes that already have a position never move.
+- Entries and diagrams that no longer exist are removed (one line each); positions of
+  existing enums are kept.
+- Without a layout file it creates one with every diagram.
+
+The result is deterministic — run twice, same bytes — and the file is only written when
+something changed. Exit codes: 0 on success, 2 like `check` when something cannot be
+read (a layout file that is not valid, e.g. with git conflict markers, is never
+overwritten).
+
 ## Configuration
 
 ```toml

@@ -13,8 +13,9 @@ import erdify
 
 from erdify_studio import __version__
 from erdify_studio._check import check_project
-from erdify_studio._config import load_config
+from erdify_studio._config import StudioConfig, load_config
 from erdify_studio._errors import StudioError
+from erdify_studio._place import place_project
 
 #: Exit code of a failed check (out-of-date layout).
 EXIT_CHECK_FAILED = 1
@@ -48,14 +49,35 @@ def build_parser() -> argparse.ArgumentParser:
             "when the layout matches the models."
         ),
     )
-    check.add_argument(
+    _add_path(check)
+    place = commands.add_parser(
+        "place",
+        help="place new entities and drop stale entries (--auto)",
+        description=(
+            "Give every entity and foreign box without a position one next to the "
+            "entities it is connected with (else in a grid right of the diagram), and "
+            "drop stale entries and diagrams. Placed entities never move. Creates the "
+            "layout file when there is none."
+        ),
+    )
+    place.add_argument(
+        "--auto",
+        action="store_true",
+        required=True,
+        help="place without opening the canvas (required)",
+    )
+    _add_path(place)
+    return parser
+
+
+def _add_path(command: argparse.ArgumentParser) -> None:
+    command.add_argument(
         "path",
         nargs="?",
         default=".",
         type=Path,
         help="input directory or file, as passed to erdify (default: .)",
     )
-    return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -64,6 +86,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command is None:
         return 0
     try:
+        if args.command == "place":
+            return _place(args.path)
         return _check(args.path)
     except (
         StudioError,
@@ -85,11 +109,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return EXIT_ERROR
 
 
-def _check(path: Path) -> int:
+def _load(path: Path) -> tuple[erdify.Project, StudioConfig]:
     # strict: a file erdify cannot parse would otherwise drop its tables, and their
     # positions would read as stale entries that `place --auto` deletes.
     project = erdify.load_project(path, strict=True)
-    config = load_config(project.settings.pyproject)
+    return project, load_config(project.settings.pyproject)
+
+
+def _check(path: Path) -> int:
+    project, config = _load(path)
     problems = check_project(project, config)
     shown = _display(config.layout)
     if problems is None:
@@ -100,6 +128,32 @@ def _check(path: Path) -> int:
         print(f"{shown}: {problem}", file=sys.stderr)
     print(_HINT, file=sys.stderr)
     return EXIT_CHECK_FAILED
+
+
+def _place(path: Path) -> int:
+    project, config = _load(path)
+    result = place_project(project, config)
+    shown = _display(config.layout)
+    for diagram in result.removed_diagrams:
+        print(f"{shown}: removed stale diagram {diagram!r}")
+    for diagram, key in result.removed:
+        print(f"{shown}: diagram {diagram!r}: removed stale entry {key!r}")
+    if not result.changed:
+        print(f"{shown}: up to date")
+        return 0
+    changes = [
+        _count(len(result.placed), "box", "boxes", "placed"),
+        _count(len(result.removed), "stale entry", "stale entries", "removed"),
+        _count(len(result.removed_diagrams), "stale diagram", "stale diagrams", "removed"),
+    ]
+    action = "created" if result.created else "updated"
+    print(f"{shown}: {', '.join([action, *filter(None, changes)])}")
+    return 0
+
+
+def _count(n: int, one: str, many: str, verb: str) -> str:
+    """``"<verb> <n> <noun>"``; empty for zero."""
+    return f"{verb} {n} {one if n == 1 else many}" if n else ""
 
 
 def _display(path: Path) -> str:
