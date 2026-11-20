@@ -1,28 +1,50 @@
 name: Testing
-# A newer push to the same PR cancels the older run; every push to main gets its
-# own group so each merge commit is verified as a whole.
+
 concurrency:
   group: "testing-${{ github.event_name == 'push' && github.sha || github.ref }}"
   cancel-in-progress: true
+
 on:
   push: { branches: [main] }
   pull_request: { branches: [main] }
+
 permissions:
   contents: read
+
 jobs:
   test:
-    name: Test Python ${{ matrix.python-version }}
-    runs-on: ubuntu-latest
+    name: Test Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.13"]
+        # Full Python sweep on Linux; macOS/Windows smoke-test min + max (same as erdify).
+        os: [ubuntu-latest]
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.15"]
+        include:
+          - { os: macos-latest, python-version: "3.11" }
+          - { os: macos-latest, python-version: "3.15" }
+          - { os: windows-latest, python-version: "3.11" }
+          - { os: windows-latest, python-version: "3.15" }
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.3
-        with: { enable-cache: true }
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # hatch-vcs derives the version from the latest tag
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          # Newest uv whose checksum ships with setup-uv: new uv versions only arrive
+          # through a reviewed Dependabot bump of this action.
+          version: "latest-known"
+          # Sets UV_PYTHON for later steps; otherwise uv would honour .python-version.
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
       - run: uv sync --frozen
-      - run: uv run pytest
+      - name: Assert the matrix Python is in use
+        env:
+          EXPECTED: ${{ matrix.python-version }}
+        shell: bash
+        run: uv run python -c "import os, sys; assert '%d.%d' % sys.version_info[:2] == os.environ['EXPECTED'], sys.version"
+      # Coverage gate (fail_under in pyproject.toml) is part of `poe test`.
+      - run: uv run poe test

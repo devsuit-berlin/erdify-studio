@@ -10,6 +10,11 @@ repos:
         args: [--allow-multiple-documents]
       - id: check-toml
       - id: check-added-large-files
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.11.21
+    hooks:
+      # Fail when uv.lock is out of sync with pyproject.toml.
+      - id: uv-lock
   - repo: local
     hooks:
       - id: check-instructions
@@ -19,9 +24,19 @@ repos:
         pass_filenames: false
         # Globs depend on the tracked file list, so a rename anywhere can break it.
         always_run: true
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.4
-    hooks:
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-check
+        name: Check code with ruff
+        entry: uv run ruff check --force-exclude --fix --exit-non-zero-on-fix
+        language: system
+        types: [python]
       - id: ruff-format
+        name: Format code with ruff
+        entry: uv run ruff format --force-exclude --exit-non-zero-on-format
+        language: system
+        types: [python]
+      - id: mypy
+        name: Type check with mypy (strict)
+        entry: uv run mypy
+        language: system
+        types: [python]
+        pass_filenames: false

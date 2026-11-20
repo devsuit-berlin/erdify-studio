@@ -4,6 +4,14 @@ __pycache__/
 .pytest_cache/
 .coverage
 dist/
+build/
+.mypy_cache/
+.ruff_cache/
+coverage.xml
+
+# Frontend: dependencies and the build that ships inside the wheel
+frontend/node_modules/
+src/erdify_studio/_static/
 *.egg-info/
 
 # Personal / local agent setup
