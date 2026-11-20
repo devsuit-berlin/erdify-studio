@@ -35,7 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   config, a model file or the layout file cannot be read, or erdify finds no entities
   (unless `allow_empty`), and on an internal error (with its traceback). Every enum
   erdify draws needs a position on the overview and on the group diagrams of the
-  entities using it (problem kind `enum`). A pre-commit hook
+  entities using it (problem kind `enum`); a layout without them fails `check` once,
+  `erdify-studio place --auto` adds them. A pre-commit hook
   `erdify-studio-check` runs it. Python API: `check_project`, `Problem`,
   `ProblemKind`, `ProjectError`.
 - `erdify-studio place --auto [path]`: gives every entity and foreign box without a

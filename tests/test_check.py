@@ -110,13 +110,20 @@ def test_a_complete_layout_has_no_problems(
 @pytest.mark.parametrize(
     ("diagram", "key"), [("core", "billing.invoices"), ("billing", "core.customers")]
 )
-# Both edges name their schema ("core.customers.id"): erdify#373, fixed in 1.8.0.
+@pytest.mark.parametrize(
+    "models",
+    [
+        MODELS,  # foreign keys naming their schema ("core.customers.id", erdify#373)
+        MODELS.replace('"core.customers.id"', '"customers.id"'),  # without the schema
+    ],
+    ids=["qualified", "unqualified"],
+)
 def test_foreign_boxes_are_required_in_both_directions(
-    tmp_path: Path, diagram: str, key: str
+    tmp_path: Path, models: str, diagram: str, key: str
 ) -> None:
     layout = _complete()
     del layout.diagrams[diagram][key]
-    assert _check(_project(tmp_path), layout) == [Problem(diagram, key, "foreign")]
+    assert _check(_project(tmp_path, models), layout) == [Problem(diagram, key, "foreign")]
 
 
 def test_entity_names_that_differ_from_their_keys(tmp_path: Path) -> None:
