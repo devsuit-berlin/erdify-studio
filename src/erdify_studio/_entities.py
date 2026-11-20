@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Mapping
 
 from erdify import EntityInfo, EnumInfo
@@ -31,20 +32,25 @@ def enum_key(enum: EnumInfo) -> str:
 def entity_keys(entities: Mapping[str, EntityInfo]) -> dict[str, str]:
     """Map every entity name (erdify's key) to its layout key.
 
+    The layout key is ``entity_key`` while no other entity has it. Entities that
+    share one (same-name classes in different modules, which erdify names
+    ``module.Class``; or several classes of one table) are keyed by their erdify
+    name instead, so only they change key when a namesake appears.
+
     Raises:
-        DuplicateKeyError: Two entities have the same layout key.
+        DuplicateKeyError: An erdify name used as a key equals another entity's key.
     """
-    keys: dict[str, str] = {}
+    base = {name: entity_key(entity) for name, entity in entities.items()}
+    shared = Counter(base.values())
+    keys = {name: name if shared[key] > 1 else key for name, key in base.items()}
     owners: dict[str, str] = {}
-    for name, entity in entities.items():
-        key = entity_key(entity)
+    for name, key in keys.items():
         if key in owners:
             first, second = sorted((owners[key], name))
             raise DuplicateKeyError(
                 f"entities {first!r} and {second!r} have the same layout key {key!r}"
             )
         owners[key] = name
-        keys[name] = key
     return keys
 
 

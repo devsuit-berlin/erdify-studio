@@ -188,9 +188,13 @@ def test_an_empty_project_with_allow_empty_gets_an_empty_overview(tmp_path: Path
 
 
 def test_duplicate_layout_keys_are_refused_before_writing(tmp_path: Path) -> None:
-    models = MODELS.replace('__tablename__ = "lines"', '__tablename__ = "invoices"')
+    # Invoice and Line share a table, so they are keyed by name; Bill's table is "Invoice".
+    models = MODELS.replace('__tablename__ = "lines"', '__tablename__ = "invoices"') + (
+        '\n\nclass Bill(SQLModel, table=True):\n    __tablename__ = "Invoice"\n'
+        "    id: int = Field(primary_key=True)\n"
+    )
     root = _project(tmp_path, models)
-    with pytest.raises(DuplicateKeyError, match="'Invoice' and 'Line'"):
+    with pytest.raises(DuplicateKeyError, match="'Bill' and 'Invoice'"):
         _place(root)
     assert not (root / "erdify-layout.json").exists()
 
@@ -485,3 +489,24 @@ def test_cli_parse_error_exits_two_and_writes_nothing(
     (project / "shop" / "models.py").write_text("class Broken(:\n")
     assert main(["place", "--auto"]) == 2
     assert not (project / "erdify-layout.json").exists()
+
+
+TWO_CLASSES_ONE_TABLE = """\
+from sqlmodel import Field, SQLModel
+
+
+class Address(SQLModel, table=True):
+    __tablename__ = "address"
+    id: int = Field(primary_key=True)
+
+
+class ShippingAddress(SQLModel, table=True):
+    __tablename__ = "address"
+    id: int = Field(primary_key=True)
+"""
+
+
+def test_entities_sharing_a_table_name_are_placed_by_name(tmp_path: Path) -> None:
+    root = _project(tmp_path, TWO_CLASSES_ONE_TABLE, studio='group_by = "none"\n')
+    assert set(_place(root).layout.diagrams[OVERVIEW]) == {"Address", "ShippingAddress"}
+    assert _check(root) == []

@@ -133,7 +133,10 @@ export_dir = "docs/erd"                  # optional; omitted = no committed SVGs
 `group_by = "auto"` picks, per entity, its database schema, else its Django app, else its
 Python module. Entities are keyed in the layout file by `schema.table` (or `table`), so
 renaming a class keeps its position; same-name tables in different schemas get their
-own key. Enums are keyed `enum:<name>`.
+own key. Entities that would share a key (same-name classes in different modules, or two
+classes of one table) are keyed by erdify's entity name instead, e.g.
+`billing.models.Address`; when such a namesake appears later, the first one's key changes
+once. Enums are keyed `enum:<name>`.
 
 ## Contributing
 
