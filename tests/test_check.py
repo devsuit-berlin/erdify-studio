@@ -80,7 +80,7 @@ def _complete(diagrams: Mapping[str, tuple[str, ...]] = AUTO) -> Layout:
 
 
 def _check(root: Path, layout: Layout | None = None) -> list[Problem] | None:
-    project = erdify.load_project(root)
+    project = erdify.load_project(root, strict=True)
     config = load_config(project.settings.pyproject)
     if layout is not None:
         save_layout(layout, config.layout)
@@ -146,6 +146,14 @@ def test_unplaced_entities_are_reported_per_diagram(tmp_path: Path) -> None:
         Problem(OVERVIEW, "billing.lines", "unplaced"),
         Problem("billing", "billing.lines", "unplaced"),
     ]
+
+
+def test_the_overview_is_reported_first(tmp_path: Path) -> None:
+    # "_" sorts after uppercase letters: the overview must not end up after "Sales".
+    models = MODELS.replace('{"schema": "core"}', '{"schema": "Sales"}')
+    problems = _check(_project(tmp_path, models), Layout())
+    assert problems is not None
+    assert [p.diagram for p in problems] == [OVERVIEW] * 3 + ["Sales"] * 2 + ["billing"] * 3
 
 
 def test_a_missing_diagram_reports_all_its_boxes(tmp_path: Path) -> None:

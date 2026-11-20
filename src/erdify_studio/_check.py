@@ -98,7 +98,9 @@ def check_layout(
     *,
     unchecked: Collection[str] = frozenset(),
 ) -> list[Problem]:
-    """Return how ``layout`` differs from ``diagrams``, sorted; empty when it matches.
+    """Return how ``layout`` differs from ``diagrams``; empty when it matches.
+
+    Sorted by diagram (the overview first), then key.
 
     A missing diagram is no problem of its own: its entities are reported unplaced.
 
@@ -119,7 +121,8 @@ def check_layout(
     problems += [
         Problem(name, None, "stale_diagram") for name in layout.diagrams.keys() - diagrams.keys()
     ]
-    return sorted(problems, key=lambda p: (p.diagram, p.key or "", p.kind))
+    # The overview first, then the groups by name ("_" would sort after uppercase).
+    return sorted(problems, key=lambda p: (p.diagram != OVERVIEW, p.diagram, p.key or "", p.kind))
 
 
 def check_project(project: Project, config: StudioConfig) -> list[Problem] | None:
