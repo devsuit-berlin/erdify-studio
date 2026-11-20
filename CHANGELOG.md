@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Requires erdify 1.8.0: the enums erdify draws (`erdify.enum_users`), same-name
+  tables in different schemas and schema-qualified foreign keys are laid out exactly
+  as erdify draws them.
 - Package scaffold: `pip install erdify-studio` installs the `erdify-studio` command
   (`--help`, `--version`) with erdify as a dependency; `erdify-studio[sql]` pulls in
   `erdify[sql]`. The browser frontend is built in CI and shipped inside the wheel, so no
@@ -30,14 +33,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the layout file is missing or empty; the last line suggests `erdify-studio place
   --auto`. Exits 0 without output when the layout is up to date, 2 when the project,
   config, a model file or the layout file cannot be read, or erdify finds no entities
-  (unless `allow_empty`), and on an internal error (with its traceback). Positions of
-  existing enums are kept but not required yet (erdify#369). A pre-commit hook
+  (unless `allow_empty`), and on an internal error (with its traceback). Every enum
+  erdify draws needs a position on the overview and on the group diagrams of the
+  entities using it (problem kind `enum`); a layout without them fails `check` once,
+  `erdify-studio place --auto` adds them. A pre-commit hook
   `erdify-studio-check` runs it. Python API: `check_project`, `Problem`,
   `ProblemKind`, `ProjectError`.
 - `erdify-studio place --auto [path]`: gives every entity and foreign box without a
   position one next to a placed box it is connected with (right, below, left or above),
   else the first free slot of a grid right of the diagram; placed boxes never move. Drops
-  stale entries and diagrams, keeps positions of existing enums, and creates the layout
+  stale entries and diagrams, places enums next to an entity using them, and creates the layout
   file with every diagram when there is none. Deterministic: the same input gives the
   same bytes, the file is only written when something changed, and `check` passes
   afterwards. Python API: `place_project`, `PlaceResult`.

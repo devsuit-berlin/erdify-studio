@@ -225,11 +225,11 @@ wheels = [
 
 [[package]]
 name = "erdify"
-version = "1.7.0"
+version = "1.8.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/4a/7c/2bb6aef1113a209cbde2d1ff1911d3eb5a34e58fe24813ddd468ef6b6bd1/erdify-1.7.0.tar.gz", hash = "sha256:5ab0a73ce280093b2916f958ebeec691e83965f6ff3b325bee5fb11d5aa2ad34", size = 108238, upload-time = "2026-11-20T10:57:04.904Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f7/47/282ddace221e8dc4a07081a73e85a2b816175cd68ac4843e5da56dc6368c/erdify-1.8.0.tar.gz", hash = "sha256:3eb8a2a332f70a21a12758cdae9a21fe3ded8846f53fc0e7f62816911bfaeb76", size = 113028, upload-time = "2026-11-20T12:59:16.314Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/74/1a/38a1134eb09c50521097ee80604dfec06caffae6005e29e9a1ccbcc5fc76/erdify-1.7.0-py3-none-any.whl", hash = "sha256:676842bf9ea427ae2d94fb9a992c67909c8e68c4a02854fc8e6dafca354c539e", size = 120437, upload-time = "2026-11-20T10:57:04.009Z" },
+    { url = "https://files.pythonhosted.org/packages/7d/4b/9277bd100481260776f7f4ac0d1a9c4919042068b7dbbfdbf62347a8b263/erdify-1.8.0-py3-none-any.whl", hash = "sha256:9b5da7d994b6a5b775535a3439227d4d795b2083f0204a0202d2359a45a8c2b7", size = 125602, upload-time = "2026-11-20T12:59:15.162Z" },
 ]
 
 [package.optional-dependencies]
@@ -251,6 +251,7 @@ sql = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "erdify", extra = ["sql"] },
     { name = "mypy" },
     { name = "poethepoet" },
     { name = "pytest" },
@@ -263,13 +264,14 @@ hooks = [
 
 [package.metadata]
 requires-dist = [
-    { name = "erdify", specifier = ">=1.7.0,<2" },
-    { name = "erdify", extras = ["sql"], marker = "extra == 'sql'", specifier = ">=1.7.0,<2" },
+    { name = "erdify", specifier = ">=1.8.0,<2" },
+    { name = "erdify", extras = ["sql"], marker = "extra == 'sql'", specifier = ">=1.8.0,<2" },
 ]
 provides-extras = ["sql"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "erdify", extras = ["sql"], specifier = ">=1.8.0,<2" },
     { name = "mypy", specifier = ">=2.4" },
     { name = "poethepoet", specifier = ">=0.49.0" },
     { name = "pytest", specifier = ">=9.2.0" },

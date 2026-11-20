@@ -1,6 +1,7 @@
 """The ``check`` command: diagram contents, layout problems and the CLI."""
 
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from pathlib import Path
 
 import erdify
@@ -39,14 +40,14 @@ class Invoice(SQLModel, table=True):
     __tablename__ = "invoices"
     __table_args__ = {"schema": "billing"}
     id: int = Field(primary_key=True)
-    customer_id: int = Field(foreign_key="customers.id")
+    customer_id: int = Field(foreign_key="core.customers.id")
 
 
 class Line(SQLModel, table=True):
     __tablename__ = "lines"
     __table_args__ = {"schema": "billing"}
     id: int = Field(primary_key=True)
-    invoice_id: int = Field(foreign_key="invoices.id")
+    invoice_id: int = Field(foreign_key="billing.invoices.id")
 """
 
 ALL = ("billing.invoices", "billing.lines", "core.customers")
@@ -109,12 +110,31 @@ def test_a_complete_layout_has_no_problems(
 @pytest.mark.parametrize(
     ("diagram", "key"), [("core", "billing.invoices"), ("billing", "core.customers")]
 )
+@pytest.mark.parametrize(
+    "models",
+    [
+        MODELS,  # foreign keys naming their schema ("core.customers.id", erdify#373)
+        MODELS.replace('"core.customers.id"', '"customers.id"'),  # without the schema
+    ],
+    ids=["qualified", "unqualified"],
+)
 def test_foreign_boxes_are_required_in_both_directions(
-    tmp_path: Path, diagram: str, key: str
+    tmp_path: Path, models: str, diagram: str, key: str
 ) -> None:
     layout = _complete()
     del layout.diagrams[diagram][key]
-    assert _check(_project(tmp_path), layout) == [Problem(diagram, key, "foreign")]
+    assert _check(_project(tmp_path, models), layout) == [Problem(diagram, key, "foreign")]
+
+
+def test_entity_names_that_differ_from_their_keys(tmp_path: Path) -> None:
+    # erdify names edge ends and enum users by EntityInfo.name, which may differ
+    # from the dict key: studio maps them, with the same result.
+    root = _project(tmp_path, WITH_ENUM)
+    project = erdify.load_project(root, strict=True)
+    rekeyed = replace(project, entities={f"x.{k}": e for k, e in project.entities.items()})
+    config = load_config(project.settings.pyproject)
+    save_layout(_complete(), config.layout)
+    assert check_project(rekeyed, config) == check_project(project, config) != []
 
 
 def test_without_relationships_there_are_no_foreign_boxes(tmp_path: Path) -> None:
@@ -150,7 +170,7 @@ def test_unplaced_entities_are_reported_per_diagram(tmp_path: Path) -> None:
 
 def test_the_overview_is_reported_first(tmp_path: Path) -> None:
     # "_" sorts after uppercase letters: the overview must not end up after "Sales".
-    models = MODELS.replace('{"schema": "core"}', '{"schema": "Sales"}')
+    models = MODELS.replace('"core', '"Sales')  # the schema and the foreign key naming it
     problems = _check(_project(tmp_path, models), Layout())
     assert problems is not None
     assert [p.diagram for p in problems] == [OVERVIEW] * 3 + ["Sales"] * 2 + ["billing"] * 3
@@ -177,11 +197,68 @@ def test_stale_entries_and_diagrams_are_reported(tmp_path: Path) -> None:
     ]
 
 
-def test_existing_enums_are_kept_but_not_required(tmp_path: Path) -> None:
+#: ``MODELS`` with ``billing.invoices`` using the ``Status`` enum.
+WITH_ENUM = MODELS.replace(
+    'customer_id: int = Field(foreign_key="core.customers.id")',
+    'customer_id: int = Field(foreign_key="core.customers.id")\n    status: Status',
+)
+
+
+def test_a_drawn_enum_is_required_where_its_users_are(tmp_path: Path) -> None:
+    # Invoice (group billing) uses Status: the overview and billing show it, core not.
+    assert _check(_project(tmp_path, WITH_ENUM), _complete()) == [
+        Problem(OVERVIEW, "enum:Status", "enum"),
+        Problem("billing", "enum:Status", "enum"),
+    ]
+
+
+def test_a_drawn_enum_with_positions_has_no_problems(tmp_path: Path) -> None:
     layout = _complete()
-    layout.set_position("core", "enum:Status", 0, 0)
-    layout.set_position(OVERVIEW, "enum:Gone", 0, 0)
-    assert _check(_project(tmp_path), layout) == [Problem(OVERVIEW, "enum:Gone", "stale_entry")]
+    layout.set_position(OVERVIEW, "enum:Status", 0, 300)
+    layout.set_position("billing", "enum:Status", 0, 300)
+    assert _check(_project(tmp_path, WITH_ENUM), layout) == []
+
+
+@pytest.mark.parametrize(
+    ("models", "erdify"),
+    [
+        (MODELS, ""),  # Status exists, but no field uses it: erdify does not draw it
+        (WITH_ENUM, "no_enums = true\n"),
+    ],
+)
+def test_an_enum_erdify_does_not_draw_is_stale(tmp_path: Path, models: str, erdify: str) -> None:
+    layout = _complete()
+    layout.set_position(OVERVIEW, "enum:Status", 0, 300)
+    assert _check(_project(tmp_path, models, erdify=erdify), layout) == [
+        Problem(OVERVIEW, "enum:Status", "stale_entry")
+    ]
+
+
+def test_an_enum_is_stale_on_a_group_diagram_without_its_users(tmp_path: Path) -> None:
+    layout = _complete()
+    for diagram in (OVERVIEW, "billing", "core"):
+        layout.set_position(diagram, "enum:Status", 0, 300)
+    assert _check(_project(tmp_path, WITH_ENUM), layout) == [
+        Problem("core", "enum:Status", "stale_entry")
+    ]
+
+
+SQL = """\
+CREATE TABLE core.customer (id INT PRIMARY KEY);
+CREATE TABLE mart.customer (id INT PRIMARY KEY, src_id INT REFERENCES core.customer(id));
+"""
+
+
+def test_same_name_sql_tables_in_two_schemas_are_two_boxes(tmp_path: Path) -> None:
+    (tmp_path / "schema.sql").write_text(SQL)
+    (tmp_path / "pyproject.toml").write_text('[tool.erdify]\ninclude = ["*.sql"]\n')
+    layout = Layout()
+    for i, key in enumerate(("core.customer", "mart.customer")):
+        for diagram in (OVERVIEW, "core", "mart"):
+            layout.set_position(diagram, key, i * 300, 0)
+    assert _check(tmp_path, layout) == []
+    del layout.diagrams["core"]["mart.customer"]
+    assert _check(tmp_path, layout) == [Problem("core", "mart.customer", "foreign")]
 
 
 def test_a_project_without_entities_is_refused(tmp_path: Path) -> None:
@@ -201,6 +278,7 @@ def test_another_layout_version_is_refused(tmp_path: Path) -> None:
     [
         (Problem("core", "a", "unplaced"), "diagram 'core': entity 'a' has no position"),
         (Problem("core", "a", "foreign"), "diagram 'core': foreign box 'a' has no position"),
+        (Problem("core", "enum:S", "enum"), "diagram 'core': enum 'enum:S' has no position"),
         (
             Problem("core", "a", "stale_entry"),
             "diagram 'core': stale entry 'a': not in this diagram",
@@ -252,16 +330,13 @@ def test_cli_reports_one_line_per_problem_then_the_hint(
     ]
 
 
-def test_cli_keeps_positions_of_existing_enums(
-    project: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    layout = _complete()
-    layout.set_position(OVERVIEW, "enum:Status", 0, 0)
-    layout.set_position(OVERVIEW, "enum:Gone", 0, 0)
-    save_layout(layout, project / "erdify-layout.json")
+def test_cli_reports_a_missing_enum(project: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    (project / "shop" / "models.py").write_text(WITH_ENUM)
+    save_layout(_complete(), project / "erdify-layout.json")
     assert main(["check"]) == 1
     assert capsys.readouterr().err.splitlines()[:-1] == [
-        "erdify-layout.json: diagram '_overview': stale entry 'enum:Gone': not in this diagram"
+        "erdify-layout.json: diagram '_overview': enum 'enum:Status' has no position",
+        "erdify-layout.json: diagram 'billing': enum 'enum:Status' has no position",
     ]
 
 

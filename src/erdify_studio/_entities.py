@@ -48,6 +48,19 @@ def entity_keys(entities: Mapping[str, EntityInfo]) -> dict[str, str]:
     return keys
 
 
+def entity_ids(entities: Mapping[str, EntityInfo]) -> dict[str, str]:
+    """Map every entity name (``EntityInfo.name``) to its key in ``entities``.
+
+    erdify's edges and ``enum_users`` name entities by ``EntityInfo.name``, which
+    may differ from the dict key; a key equal to the name wins over another entity
+    of that name.
+    """
+    ids = {name: name for name, entity in entities.items() if entity.name == name}
+    for name, entity in sorted(entities.items()):
+        ids.setdefault(entity.name, name)
+    return ids
+
+
 def entity_groups(entities: Mapping[str, EntityInfo], group_by: GroupBy) -> dict[str, str]:
     """Map every entity name to the group diagram it belongs to.
 
