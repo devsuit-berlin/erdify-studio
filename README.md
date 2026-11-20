@@ -42,17 +42,15 @@ plus a `[tool.erdify-studio]` section.
 erdify-studio check [path]   # path: the input erdify reads (default: .)
 ```
 
-Exits 1 with one line per problem when an entity, a foreign box (an entity of
-another group connected by a relationship) or an enum erdify draws has no position in
-a diagram (an enum belongs on the overview and on the group diagrams of the entities
-using it), or the
-layout file holds entries or diagrams that no longer exist, or there is no layout file
-yet (missing or empty); the last line suggests
-`erdify-studio place --auto`. Exits 0 without output when the layout is up to date,
-and 2 when the project, its config or the layout file cannot be read (a model file
-erdify cannot parse included, whatever `strict` says), or erdify finds
-no entities (set erdify's `allow_empty` to check an empty project); an internal error
-also exits 2, with its traceback. Runs without a
+Exits 1 with one line per problem when an entity, a foreign box (an entity of another
+group connected by a relationship) or an enum erdify draws has no position in a diagram
+(an enum belongs on the overview and on the group diagrams of the entities using it),
+when the layout file holds entries or diagrams that no longer exist, or when there is
+no layout file yet (missing or empty); the last line suggests `erdify-studio place --auto`.
+Exits 0 without output when the layout is up to date, and 2 when the project, its config
+or the layout file cannot be read (a model file erdify cannot parse included, whatever
+`strict` says), or erdify finds no entities (set erdify's `allow_empty` to check an
+empty project); an internal error also exits 2, with its traceback. Runs without a
 browser, Node or network.
 
 With [pre-commit](https://pre-commit.com):
