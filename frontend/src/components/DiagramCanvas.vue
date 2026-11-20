@@ -13,6 +13,8 @@ const props = defineProps<{
   newKeys: ReadonlySet<string>;
 }>();
 
+const emit = defineEmits<{ move: [key: string, position: Position] }>();
+
 const svg = ref<SVGSVGElement | null>(null);
 const view = ref({ x: 0, y: 0, scale: 1 });
 
@@ -106,6 +108,40 @@ function onBackgroundUp(event: PointerEvent): void {
   if (pan?.pointer === event.pointerId) pan = null;
 }
 
+// --- drag a box ---------------------------------------------------------------------
+
+const dragging = ref<{ key: string; pointer: number; x: number; y: number; bx: number; by: number } | null>(null);
+
+// The dragged box is drawn last, on top of the others.
+const ordered = computed(() => {
+  const key = dragging.value?.key;
+  return key ? [...props.overview.boxes.filter((b) => b.key !== key), ...props.overview.boxes.filter((b) => b.key === key)] : props.overview.boxes;
+});
+
+function onBoxDown(event: PointerEvent, key: string): void {
+  if (event.button !== 0) return;
+  event.stopPropagation();
+  const rect = rects.value[key];
+  dragging.value = { key, pointer: event.pointerId, x: event.clientX, y: event.clientY, bx: rect.x, by: rect.y };
+  (event.currentTarget as Element).setPointerCapture(event.pointerId);
+}
+
+function onBoxMove(event: PointerEvent): void {
+  const drag = dragging.value;
+  if (!drag || drag.pointer !== event.pointerId) return;
+  const { scale } = view.value;
+  const x = Math.round(drag.bx + (event.clientX - drag.x) / scale);
+  const y = Math.round(drag.by + (event.clientY - drag.y) / scale);
+  const current = props.positions[drag.key];
+  if (!current || current[0] !== x || current[1] !== y) {
+    emit("move", drag.key, [x, y]);
+  }
+}
+
+function onBoxUp(event: PointerEvent): void {
+  if (dragging.value?.pointer === event.pointerId) dragging.value = null;
+}
+
 onMounted(fit);
 
 defineExpose({ fit });
@@ -148,14 +184,18 @@ defineExpose({ fit });
           :label="edge.label"
         />
         <BoxNode
-          v-for="box in overview.boxes"
+          v-for="box in ordered"
           :key="box.key"
           :box="box"
           :x="rects[box.key].x"
           :y="rects[box.key].y"
           :metrics="overview.metrics"
           :is-new="newKeys.has(box.key)"
-          :dragging="false"
+          :dragging="dragging?.key === box.key"
+          @pointerdown="onBoxDown($event, box.key)"
+          @pointermove="onBoxMove"
+          @pointerup="onBoxUp"
+          @pointercancel="onBoxUp"
         />
       </g>
     </svg>
