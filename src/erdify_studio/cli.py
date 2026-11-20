@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import traceback
 from collections.abc import Sequence
 from importlib.metadata import version
 from pathlib import Path
@@ -17,7 +18,7 @@ from erdify_studio._errors import StudioError
 
 #: Exit code of a failed check (out-of-date layout).
 EXIT_CHECK_FAILED = 1
-#: Exit code when the project, its config or the layout file cannot be read.
+#: Exit code when the project, its config or the layout file cannot be read, or on a bug.
 EXIT_ERROR = 2
 
 _HINT = (
@@ -72,6 +73,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         OSError,
     ) as e:
         print(f"erdify-studio: error: {e}", file=sys.stderr)
+        return EXIT_ERROR
+    except Exception:
+        # A bug, not an out-of-date layout: keep the traceback for the report, but
+        # don't exit 1, which CI would read as a failed check.
+        traceback.print_exc()
+        print(
+            "erdify-studio: internal error (please report it with the traceback above)",
+            file=sys.stderr,
+        )
         return EXIT_ERROR
 
 

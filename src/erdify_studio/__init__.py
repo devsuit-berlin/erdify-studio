@@ -2,14 +2,7 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-from erdify_studio._check import (
-    DiagramContent,
-    Problem,
-    ProblemKind,
-    check_layout,
-    check_project,
-    diagram_contents,
-)
+from erdify_studio._check import Problem, ProblemKind, check_project
 from erdify_studio._config import GroupBy, StudioConfig, load_config
 from erdify_studio._entities import entity_groups, entity_key, entity_keys, enum_key
 from erdify_studio._errors import (
@@ -42,7 +35,6 @@ __all__ = [
     "LAYOUT_VERSION",
     "OVERVIEW",
     "ConfigError",
-    "DiagramContent",
     "DuplicateKeyError",
     "GroupBy",
     "Layout",
@@ -55,9 +47,7 @@ __all__ = [
     "StudioConfig",
     "StudioError",
     "__version__",
-    "check_layout",
     "check_project",
-    "diagram_contents",
     "dumps_layout",
     "entity_groups",
     "entity_key",
