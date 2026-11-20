@@ -8,7 +8,8 @@ import { defineConfig, type Plugin } from "vite";
 
 // @iconify/vue falls back to the public Iconify API for an icon that is not bundled.
 // The studio must never go online: drop the API hosts, so a missing icon renders
-// empty instead of being fetched. Fails the build if @iconify/vue changes the line.
+// empty instead of being fetched. Fails the build if any @iconify/vue module still
+// names an API host afterwards (e.g. upstream changed the line this replaces).
 const ICONIFY_API = '{ resources: ["https://api.iconify.design", "https://api2.iconify.design"] }';
 
 function offlineIcons(): Plugin {
@@ -16,13 +17,12 @@ function offlineIcons(): Plugin {
     name: "erdify-studio:offline-icons",
     enforce: "pre",
     transform(code, id) {
-      if (!/[\\/]@iconify[\\/]vue[\\/]/.test(id) || !code.includes("configStorage[\"\"]")) {
-        return null;
-      }
-      if (!code.includes(ICONIFY_API)) {
+      if (!/[\\/]@iconify[\\/]vue[\\/]/.test(id)) return null;
+      const result = code.replace(ICONIFY_API, "{ resources: [] }");
+      if (/api\d*\.iconify\.design/.test(result)) {
         this.error(`@iconify/vue changed: cannot remove its API hosts from ${id}`);
       }
-      return code.replace(ICONIFY_API, "{ resources: [] }");
+      return result === code ? null : result;
     },
   };
 }

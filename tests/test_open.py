@@ -157,3 +157,13 @@ def test_a_missing_frontend_build_exits_2(
     assert main([str(_project(tmp_path / "p"))]) == 2
     assert opened == []
     assert "uv run poe frontend" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("port", ["-1", "65536", "http"])
+def test_an_invalid_port_is_a_usage_error(
+    tmp_path: Path, opened: list[str], capsys: pytest.CaptureFixture[str], port: str
+) -> None:
+    with pytest.raises(SystemExit) as exc:
+        main(["--port", port, str(_project(tmp_path / "p"))])
+    assert exc.value.code == 2
+    assert "--port" in capsys.readouterr().err

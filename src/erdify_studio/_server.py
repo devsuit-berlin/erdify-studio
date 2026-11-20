@@ -211,6 +211,9 @@ class _Handler(BaseHTTPRequestHandler):
         except _LOAD_ERRORS as e:
             self._error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
             return
+        except Exception:
+            self._internal_error()
+            return
         self._json(HTTPStatus.OK, overview)
 
     def _save(self) -> None:
@@ -227,6 +230,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._error(HTTPStatus.CONFLICT, str(e))
         except _LOAD_ERRORS as e:
             self._error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
+        except Exception:
+            self._internal_error()
         else:
             self._json(HTTPStatus.OK, {"saved": self.server.shown_path, "revision": revision})
 
@@ -272,6 +277,12 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body)
+
+    def _internal_error(self) -> None:
+        # A bug: keep the traceback for the report, but answer, so the page does not
+        # claim the server stopped.
+        logger.exception(f"internal error handling {self.command} {self.path.split('?')[0]}")
+        self._error(HTTPStatus.INTERNAL_SERVER_ERROR, "internal error (see the terminal)")
 
     def _error(self, status: HTTPStatus, message: str) -> None:
         # The body of a refused request may be unread: don't reuse the connection.

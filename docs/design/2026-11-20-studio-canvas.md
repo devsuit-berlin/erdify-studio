@@ -103,7 +103,9 @@ Security (local server, but any web page in the same browser can send requests t
 
 ### Overview model (`GET /api/overview`)
 
-Built in Python at startup from the project, the layout file and `place_layout`:
+Built in Python for every request from the project (loaded again each time, so a page
+reload after a `git checkout` shows the current models), the layout file and
+`place_layout`:
 
 ```json
 {
@@ -121,7 +123,9 @@ Built in Python at startup from the project, the layout file and `place_layout`:
   ],
   "enumLinks": [{"enum": "enum:Status", "entity": "order"}],
   "revision": "<sha256 of the layout file, or null>",
-  "pending": {"placed": 3, "groupChanges": 2}
+  "pending": {"placed": 3, "groupChanges": 2, "created": false},
+  "layoutPath": "erdify-layout.json",
+  "projectPath": "src"
 }
 ```
 
@@ -146,15 +150,16 @@ Built in Python at startup from the project, the layout file and `place_layout`:
 ### Save (`PUT /api/layout`)
 
 - Body: `{"revision": "<from GET>", "positions": {"<key>": [x, y], …}}` for the overview.
-- Server: every key must be a box of the overview, every box must be present, values
-  go through `Layout.set_position` (rounding, range). Otherwise 400 with the message.
+- Server: values go through `Layout.set_position` (rounding, range); otherwise 400 with
+  the message. Other keys than the overview's boxes mean the page was loaded before
+  tables were added or removed (e.g. a `git checkout`): 409, like a changed file.
 - Writes what `place --auto` would write with these overview positions: the existing
   layout with the overview replaced, then `place_layout` over all diagrams (group
   diagrams get missing boxes placed, stale entries and diagrams dropped), then
   `save_layout`. Afterwards `check` passes.
 - If the layout file's current hash differs from `revision` (changed on disk, or saved
-  from another tab), 409. No silent overwrite. The user restarts (or reloads the tab
-  after a save from another tab) to pick up the change.
+  from another tab), 409. No silent overwrite. Reloading the page picks up the change
+  (file and models are read again).
 - A write error (`LayoutError`, `OSError`) → 500 with the message; the canvas keeps
   its state and stays unsaved.
 - Response: `{"saved": "<shown path>", "revision": "<new hash>"}`; the canvas keeps the
@@ -213,6 +218,9 @@ UI texts:
 - README: the "open the canvas" section; CHANGELOG entry.
 
 ## Left to the builder
+
+Known limit: box widths count characters, so wide (e.g. CJK) characters in names, which
+fall back to another font, may be clipped at the box border.
 
 - Module split of the server and the frontend components.
 - The monospace font (bundled via npm, OFL, so metrics are the same everywhere —

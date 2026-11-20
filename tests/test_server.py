@@ -360,3 +360,19 @@ def test_a_parse_error_after_start_is_500(studio: Studio) -> None:
     (studio.root / "shop" / "models.py").write_text("class Broken(:\n")
     status, _, body = studio.request("GET", "/api/overview")
     assert (status, "error" in _json(body)) == (500, True)
+
+
+def _crash(*args: object, **kwargs: object) -> None:
+    raise RuntimeError("boom")
+
+
+@pytest.mark.parametrize("target", ["build_overview", "save_overview"])
+def test_an_unexpected_error_is_500_not_a_dropped_connection(
+    studio: Studio, monkeypatch: pytest.MonkeyPatch, target: str
+) -> None:
+    monkeypatch.setattr(f"erdify_studio._server.{target}", _crash)
+    if target == "build_overview":
+        status, _, body = studio.request("GET", "/api/overview")
+    else:
+        status, _, body = studio.put_layout({"revision": None, "positions": {}})
+    assert (status, _json(body)) == (500, {"error": "internal error (see the terminal)"})

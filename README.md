@@ -55,9 +55,9 @@ erdify's own, with crow's-foot ends.
   entries are dropped), so `check` passes afterwards.
 - Boxes without a position are placed like `place --auto` does and marked **NEW** until
   you save.
-- If the layout file or the models changed after the page loaded (a `git checkout`,
-  another tab), Save refuses instead of overwriting them: reload the page, which reads
-  both again.
+- If the layout file changed, or tables were added or removed, after the page loaded
+  (a `git checkout`, another tab), Save refuses instead of overwriting: reload the
+  page, which reads both again.
 - Closing the tab with unsaved changes asks first.
 
 Like `check`, it exits 2 without starting when the canvas is not built (a source

@@ -54,7 +54,9 @@ def build_parser() -> argparse.ArgumentParser:
             "named like a command is given as ./check."
         ),
     )
-    open_.add_argument("--port", type=int, default=0, help="port to serve on (default: a free one)")
+    open_.add_argument(
+        "--port", type=_port, default=0, help="port to serve on (default: a free one)"
+    )
     open_.add_argument(
         "--no-browser",
         dest="browser",
@@ -90,6 +92,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_path(place)
     return parser
+
+
+def _port(value: str) -> int:
+    """A TCP port for ``--port``: 0 (a free one) to 65535."""
+    try:
+        port = int(value)
+    except ValueError:
+        port = -1
+    if not 0 <= port <= 65535:
+        raise argparse.ArgumentTypeError(f"must be 0 to 65535, got {value!r}")
+    return port
 
 
 def _add_path(command: argparse.ArgumentParser) -> None:
