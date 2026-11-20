@@ -274,6 +274,32 @@ def test_cli_reads_the_configured_layout_path(
     )
 
 
+def test_cli_refuses_a_project_without_entities(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A wrong path or include would otherwise report every position as stale.
+    save_layout(_complete(), project / "erdify-layout.json")
+    (project / "shop" / "models.py").write_text("")
+    assert main(["check"]) == 2
+    err = capsys.readouterr().err
+    assert "erdify-studio: error: no entities found in " in err
+    assert HINT not in err
+
+
+def test_allow_empty_checks_an_empty_project(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (project / "pyproject.toml").write_text(
+        '[tool.erdify]\ninclude = ["**/models.py"]\nallow_empty = true\n'
+    )
+    (project / "shop" / "models.py").write_text("")
+    save_layout(Layout(), project / "erdify-layout.json")
+    assert main(["check"]) == 0
+    save_layout(_complete(), project / "erdify-layout.json")
+    assert main(["check"]) == 1
+    assert "stale diagram 'core'" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize(
     ("setup", "message"),
     [

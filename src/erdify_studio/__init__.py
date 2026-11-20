@@ -7,6 +7,7 @@ from erdify_studio._check import (
     Problem,
     ProblemKind,
     check_layout,
+    check_project,
     diagram_contents,
 )
 from erdify_studio._config import GroupBy, StudioConfig, load_config
@@ -16,6 +17,7 @@ from erdify_studio._errors import (
     DuplicateKeyError,
     LayoutError,
     LayoutVersionError,
+    ProjectError,
     StudioError,
 )
 from erdify_studio._layout import (
@@ -49,10 +51,12 @@ __all__ = [
     "Position",
     "Problem",
     "ProblemKind",
+    "ProjectError",
     "StudioConfig",
     "StudioError",
     "__version__",
     "check_layout",
+    "check_project",
     "diagram_contents",
     "dumps_layout",
     "entity_groups",

@@ -46,7 +46,8 @@ Exits 1 with one line per problem when an entity or a foreign box (an entity of
 another group connected by a relationship) has no position in a diagram, or the
 layout file holds entries or diagrams that no longer exist; the last line suggests
 `erdify-studio place --auto`. Exits 0 without output when the layout is up to date,
-and 2 when the project, its config or the layout file cannot be read. Runs without a
+and 2 when the project, its config or the layout file cannot be read, or erdify finds
+no entities (set erdify's `allow_empty` to check an empty project). Runs without a
 browser, Node or network.
 
 With [pre-commit](https://pre-commit.com):

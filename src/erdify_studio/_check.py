@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Literal
 
-from erdify import EntityInfo, diagram_edges
+from erdify import EntityInfo, Project, diagram_edges
 
-from erdify_studio._config import GroupBy
-from erdify_studio._entities import entity_groups, entity_keys
-from erdify_studio._layout import OVERVIEW, Layout
+from erdify_studio._config import GroupBy, StudioConfig
+from erdify_studio._entities import entity_groups, entity_keys, enum_key
+from erdify_studio._errors import ProjectError
+from erdify_studio._layout import OVERVIEW, Layout, load_layout
 
 #: How a layout differs from its diagrams (see ``Problem``).
 ProblemKind = Literal["unplaced", "foreign", "stale_entry", "stale_diagram"]
@@ -117,3 +119,49 @@ def check_layout(
         Problem(name, None, "stale_diagram") for name in layout.diagrams.keys() - diagrams.keys()
     ]
     return sorted(problems, key=lambda p: (p.diagram, p.key or "", p.kind))
+
+
+def check_project(project: Project, config: StudioConfig) -> list[Problem] | None:
+    """Check the layout file of ``config`` against ``project``.
+
+    Positions of existing enums are kept but not required: erdify does not yet
+    tell which enums it draws (erdify#369).
+
+    Args:
+        project: The project as ``erdify.load_project`` returns it.
+        config: Its studio settings (``load_config(project.settings.pyproject)``).
+
+    Returns:
+        The problems, sorted (empty when the layout matches); None when there is no
+        layout yet (no file, or an empty one).
+
+    Raises:
+        ProjectError: The project has no entities and erdify's ``allow_empty`` is
+            off, as ``erdify`` refuses it: every position would read as stale.
+        DuplicateKeyError: Two entities have the same layout key.
+        LayoutVersionError: The layout file is of another version.
+        LayoutError: A reserved group name, or a layout file that cannot be read.
+    """
+    if not project.entities and not project.settings.allow_empty:
+        raise ProjectError(
+            f"no entities found in {str(project.settings.input)!r}; check the path and "
+            f"[tool.erdify] include / sources, or set allow_empty"
+        )
+    diagrams = diagram_contents(project.entities, config.group_by)
+    layout = _load_existing(config.layout)
+    if layout is None:
+        return None
+    enums = {enum_key(enum) for enum in project.enums.values()}
+    return check_layout(layout, diagrams, unchecked=enums)
+
+
+def _load_existing(path: Path) -> Layout | None:
+    """The layout at ``path``; None when there is none yet (no file, or an empty one)."""
+    try:
+        if not path.read_text(encoding="utf-8-sig").strip():
+            return None
+    except FileNotFoundError:
+        return None
+    except (OSError, UnicodeDecodeError):
+        pass  # load_layout reports it as a LayoutError
+    return load_layout(path)
