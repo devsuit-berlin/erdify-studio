@@ -22,7 +22,8 @@ from erdify_studio import (
     place_project,
     save_layout,
 )
-from erdify_studio._overview import Overview, build_overview, layout_revision
+from erdify_studio._errors import LayoutConflictError, PositionsError
+from erdify_studio._overview import Overview, build_overview, layout_revision, save_overview
 from erdify_studio._place import place_inputs
 
 MODELS = """\
@@ -278,3 +279,143 @@ def test_check_still_reports_what_the_overview_placed(tmp_path: Path) -> None:
 @pytest.mark.parametrize("key", ENTITIES)
 def test_every_entity_is_a_box(tmp_path: Path, key: str) -> None:
     assert _box(_overview(_project(tmp_path)), key)["kind"] == "entity"
+
+
+# --- save -------------------------------------------------------------------------
+
+
+def _positions(keys: tuple[str, ...] = (*ENTITIES, ENUM)) -> dict[str, object]:
+    return {key: [i * 400, 0] for i, key in enumerate(keys)}
+
+
+def _save(root: Path, positions: object, revision: str | None = None) -> str | None:
+    project, config = _load(root)
+    return save_overview(project, config, positions, revision)
+
+
+def test_save_writes_the_overview_positions(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    _save(root, _positions())
+    overview = load_layout(root / "erdify-layout.json").diagrams[OVERVIEW]
+    assert overview == {key: (x, y) for key, (x, y) in _positions().items()}  # type: ignore[misc]
+
+
+def test_after_save_check_passes(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    _save(root, _positions())
+    project, config = _load(root)
+    assert check_project(project, config) == []
+
+
+def test_save_returns_the_new_revision(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    assert _save(root, _positions()) == layout_revision(root / "erdify-layout.json")
+
+
+def test_save_places_the_group_diagrams(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    _save(root, _positions())
+    diagrams = load_layout(root / "erdify-layout.json").diagrams
+    assert set(diagrams) == {OVERVIEW, "billing", "core"}
+
+
+def test_save_drops_stale_entries(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    _placed(root)
+    path = root / "erdify-layout.json"
+    layout = load_layout(path)
+    layout.set_position("core", "gone.table", 0, 0)
+    save_layout(layout, path)
+    _save(root, _positions(), layout_revision(path))
+    assert "gone.table" not in load_layout(path).diagrams["core"]
+
+
+def test_save_rounds_floats(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    positions = _positions()
+    positions["core.customers"] = [10.6, 20.4]
+    _save(root, positions)
+    overview = load_layout(root / "erdify-layout.json").diagrams[OVERVIEW]
+    assert overview["core.customers"] == (11, 20)
+
+
+def _without(key: str) -> dict[str, object]:
+    positions = _positions()
+    del positions[key]
+    return positions
+
+
+def _with(key: str, value: object) -> dict[str, object]:
+    return {**_positions(), key: value}
+
+
+@pytest.mark.parametrize(
+    ("positions", "message"),
+    [
+        (_without("core.customers"), "'core.customers'"),
+        (_with("gone.table", [0, 0]), "'gone.table'"),
+        (_with("core.customers", [1]), "'core.customers'"),
+        (_with("core.customers", [1, 2, 3]), "'core.customers'"),
+        (_with("core.customers", ["1", 2]), "'core.customers'"),
+        (_with("core.customers", [True, 2]), "'core.customers'"),
+        (_with("core.customers", [float("nan"), 0]), "'core.customers'"),
+        (_with("core.customers", [10**10, 0]), "'core.customers'"),
+        (_with("core.customers", {"x": 1, "y": 2}), "'core.customers'"),
+        ([["core.customers", [0, 0]]], "positions"),
+        (None, "positions"),
+    ],
+    ids=[
+        "missing",
+        "unknown",
+        "short",
+        "long",
+        "string",
+        "bool",
+        "nan",
+        "huge",
+        "object",
+        "list",
+        "none",
+    ],
+)
+def test_save_refuses_bad_positions(tmp_path: Path, positions: object, message: str) -> None:
+    root = _project(tmp_path)
+    _placed(root)
+    path = root / "erdify-layout.json"
+    before = path.read_bytes()
+    with pytest.raises(PositionsError, match=message):
+        _save(root, positions, layout_revision(path))
+    assert path.read_bytes() == before
+
+
+def test_save_conflicts_when_the_file_changed(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    _placed(root)
+    path = root / "erdify-layout.json"
+    revision = layout_revision(path)
+    path.write_text(path.read_text() + "\n")
+    before = path.read_bytes()
+    with pytest.raises(LayoutConflictError, match="erdify-layout.json"):
+        _save(root, _positions(), revision)
+    assert path.read_bytes() == before
+
+
+def test_save_conflicts_when_the_file_was_created_meanwhile(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    _placed(root)
+    with pytest.raises(LayoutConflictError):
+        _save(root, _positions(), None)
+
+
+def test_a_second_save_needs_the_new_revision(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    first = _save(root, _positions())
+    assert _save(root, _with("core.customers", [5, 5]), first) is not None
+    with pytest.raises(LayoutConflictError):
+        _save(root, _positions(), first)
+
+
+def test_save_of_an_empty_project_creates_the_file(tmp_path: Path) -> None:
+    root = _project(tmp_path, models="", erdify_toml="allow_empty = true\n")
+    _save(root, {})
+    assert load_layout(root / "erdify-layout.json").diagrams == {OVERVIEW: {}}

@@ -9,6 +9,7 @@ revision of the layout file the positions were read from.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal, TypedDict
 
@@ -17,7 +18,8 @@ from erdify import EdgeEnd, Project, diagram_edges
 from erdify_studio._check import drawn_enums, project_diagrams
 from erdify_studio._config import StudioConfig
 from erdify_studio._entities import entity_ids, entity_keys, enum_key
-from erdify_studio._layout import OVERVIEW, Layout, load_existing_layout
+from erdify_studio._errors import LayoutConflictError, LayoutError, PositionsError
+from erdify_studio._layout import OVERVIEW, Layout, load_existing_layout, save_layout
 from erdify_studio._place import METRICS, PlaceResult, place_inputs, place_layout
 
 
@@ -179,6 +181,69 @@ def build_overview(project: Project, config: StudioConfig, *, shown_path: str) -
         "layoutPath": shown_path,
         "projectPath": str(project.settings.input),
     }
+
+
+def save_overview(
+    project: Project, config: StudioConfig, positions: object, revision: str | None
+) -> str | None:
+    """Save the overview ``positions`` and return the layout file's new revision.
+
+    Writes what ``place --auto`` would write with these overview positions: group
+    diagrams get their missing boxes placed, stale entries and diagrams are dropped,
+    so ``check_project`` passes afterwards.
+
+    Args:
+        project: The project as ``erdify.load_project(..., strict=True)`` returns it.
+        config: Its studio settings.
+        positions: Layout key -> ``[x, y]`` for every box of the overview, as decoded
+            from JSON (validated here).
+        revision: ``layout_revision`` of the file the positions were based on.
+
+    Raises:
+        LayoutConflictError: The file's revision is not ``revision`` any more.
+        PositionsError: ``positions`` does not give every overview box (and only
+            those) a finite position within the coordinate limit.
+        LayoutError: The layout file cannot be read or written (see ``save_layout``).
+    """
+    current = layout_revision(config.layout)
+    if current != revision:
+        raise LayoutConflictError(
+            f"{str(config.layout)!r} changed since the positions were read from it"
+        )
+    diagrams = project_diagrams(project, config)
+    existing = load_existing_layout(config.layout)
+    layout = Layout({name: dict(p) for name, p in (existing or Layout()).diagrams.items()})
+    layout.diagrams[OVERVIEW] = {}
+    for key, (x, y) in _checked(positions, diagrams[OVERVIEW].shown).items():
+        try:
+            layout.set_position(OVERVIEW, key, x, y)
+        except LayoutError as e:
+            raise PositionsError(str(e)) from None
+    sizes, edges = place_inputs(project)
+    result = place_layout(layout, diagrams, sizes=sizes, edges=edges)
+    save_layout(result.layout, config.layout)
+    return layout_revision(config.layout)
+
+
+def _checked(positions: object, shown: frozenset[str]) -> dict[str, tuple[float, float]]:
+    """``positions`` narrowed to key -> ``(x, y)`` numbers, with exactly the ``shown`` keys."""
+    if not isinstance(positions, Mapping):
+        raise PositionsError(f"positions must be an object, got {type(positions).__name__!r}")
+    missing = sorted(shown - positions.keys())
+    if missing:
+        raise PositionsError(f"no position for {missing[0]!r} ({len(missing)} missing)")
+    checked: dict[str, tuple[float, float]] = {}
+    for key, value in positions.items():
+        if key not in shown:
+            raise PositionsError(f"{key!r} is not a box of the overview")
+        if (
+            not isinstance(value, list)
+            or len(value) != 2
+            or not all(isinstance(v, int | float) and not isinstance(v, bool) for v in value)
+        ):
+            raise PositionsError(f"position of {key!r} must be [x, y] numbers, got {value!r}")
+        checked[key] = (value[0], value[1])
+    return checked
 
 
 def _box(
