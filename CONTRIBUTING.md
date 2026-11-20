@@ -19,7 +19,7 @@ uv run pre-commit install
 ## Everyday commands
 
 ```bash
-uv run poe test         # tests with the coverage gate (90 %)
+uv run poe test         # tests + coverage (CI gates at 90 %: add --cov-fail-under=90)
 uv run poe lint         # ruff + ruff format --check + mypy (strict)
 uv run poe format       # format
 uv run poe frontend     # build the frontend into src/erdify_studio/_static

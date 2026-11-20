@@ -34,7 +34,7 @@ jobs:
           version: "latest-known"
           enable-cache: false
       - name: Run the tests
-        run: uv run --frozen poe test
+        run: uv run --frozen poe test --cov-fail-under=90
       - name: Build the frontend
         working-directory: frontend
         run: |
@@ -66,6 +66,7 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "latest-known"
+          enable-cache: false
       - name: Publish to PyPI
         # No token: uv reads the OIDC credentials minted via id-token: write.
         run: uv publish --trusted-publishing always

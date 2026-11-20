@@ -69,7 +69,8 @@ testpaths = ["tests"]
 source = ["erdify_studio"]
 
 [tool.coverage.report]
-fail_under = 90
+# The 90 % gate is passed on the full run only (`poe test --cov-fail-under=90` in CI),
+# so narrowed runs (`poe test <path>`, `-k`) don't fail on partial coverage.
 show_missing = true
 
 [tool.mypy]
