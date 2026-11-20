@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `erdify-studio [path]` (also `erdify-studio open`, with `--port` and `--no-browser`):
+  serves the overview diagram on 127.0.0.1 and opens it in the browser. Boxes show the
+  fields erdify shows and erdify's edges with crow's-foot ends; dragging a box moves its
+  edges and marks the diagram unsaved; Save (or Ctrl/⌘+S) writes what `place --auto`
+  would write with the arranged overview, so `check` passes. Unplaced boxes are placed
+  like `place --auto` and marked NEW until saved. A layout file changed since the page
+  loaded is never overwritten (409, reload). The API needs a per-run token and checks
+  `Host` / `Origin`; the built page loads nothing from the network
+  (`scripts/check_static.py` in CI).
 - Requires erdify 1.8.0: the enums erdify draws (`erdify.enum_users`), same-name
   tables in different schemas and schema-qualified foreign keys are laid out exactly
   as erdify draws them.

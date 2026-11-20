@@ -25,6 +25,7 @@ uv run poe format       # format
 uv run poe frontend     # build the frontend into src/erdify_studio/_static
 uv run poe build        # sdist + wheel into dist/ (run `poe frontend` first)
 uv run poe check-wheel  # check the wheel ships the frontend and the CLI
+uv run poe check-static # check the built frontend loads nothing from the network
 ```
 
 ## Architecture in one paragraph
@@ -44,6 +45,16 @@ npm run build      # type-check + build into ../src/erdify_studio/_static
 ```
 
 The build output is gitignored. CI builds it before `uv build`, and the wheel ships it.
+
+With `npm run dev`, start the API with `erdify-studio --no-browser --port 8765 <project>`
+(the dev server proxies `/api` there; set `STUDIO_API` for another address) and open the
+dev page with `?token=` from the URL it prints.
+
+Box sizes come from `src/erdify_studio/_place.py`: the canvas draws exactly the
+`width` × `height` the API sends, so a change to how a box is drawn (badges, font,
+gaps) belongs there too. New npm packages are pinned exactly and must be at least 7
+days old (`npm install --save-exact --before=<date>`); the shipped page must load
+nothing from the network (`poe check-static`).
 
 ## Pull requests
 

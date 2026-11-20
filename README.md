@@ -8,8 +8,8 @@
 Arrange your [erdify](https://github.com/devsuit-berlin/erdify) ERDs by drag and drop,
 commit the layout to your repo and check in CI that it stays up to date.
 
-> **Status: pre-alpha.** Nothing to use yet — the commands below describe the planned
-> MVP. Progress is tracked in the
+> **Status: pre-alpha.** `check`, `place --auto` and the overview canvas work; group
+> diagrams and SVG export are still to come. Progress is tracked in the
 > [v0.1.0 milestone](https://github.com/devsuit-berlin/erdify-studio/milestone/1).
 
 erdify generates ERDs from your code (SQLModel, SQLAlchemy, Django, Pydantic,
@@ -24,17 +24,45 @@ pip install erdify-studio          # no Node, no database, no browser engine nee
 pip install "erdify-studio[sql]"   # to read SQL DDL (pulls in erdify[sql])
 ```
 
-## Planned commands
+## Commands
 
 ```bash
 erdify-studio [path]               # open the canvas in your browser, drag, save
 erdify-studio check [path]         # exit 1 if the committed layout is out of date
 erdify-studio place --auto [path]  # place new tables, drop stale entries
-erdify-studio export [path]        # write deterministic SVGs
+erdify-studio export [path]        # planned: write deterministic SVGs
 ```
 
 Options and sources come from erdify's config (`[tool.erdify]` in `pyproject.toml`)
 plus a `[tool.erdify-studio]` section.
+
+## Arrange the diagram
+
+```bash
+erdify-studio [path]                     # same as: erdify-studio open [path]
+erdify-studio --no-browser --port 8765   # print the URL instead of opening a browser
+```
+
+Serves the overview diagram on `127.0.0.1` (a free port unless `--port` is given) and
+opens it in your browser; Ctrl+C stops it. Every entity shows its fields (PK / FK / UK
+badges, type, `?` for nullable), enums erdify draws show their values, and the edges are
+erdify's own, with crow's-foot ends.
+
+- Drag a box: its edges follow and "Unsaved changes" appears. Drag the background to
+  pan, scroll or use the buttons to zoom.
+- **Save** (or Ctrl/⌘+S) writes the layout file: the overview as you arranged it, plus
+  what `place --auto` would do for the rest (group diagrams get missing boxes, stale
+  entries are dropped), so `check` passes afterwards.
+- Boxes without a position are placed like `place --auto` does and marked **NEW** until
+  you save.
+- If the layout file changed after the page loaded (a `git checkout`, another tab),
+  Save refuses instead of overwriting it: reload the page.
+- Closing the tab with unsaved changes asks first.
+
+Like `check`, it exits 2 without starting when the project, its config or the layout
+file cannot be read, or erdify finds no entities. The page talks to the local server
+only: no CDN, fonts and icons ship in the wheel, and the API needs the random token in
+the URL it opens, so other web pages cannot change your layout.
 
 ## Check in CI
 
