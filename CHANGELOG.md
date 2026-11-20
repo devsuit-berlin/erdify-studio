@@ -34,6 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   existing enums are kept but not required yet (erdify#369). A pre-commit hook
   `erdify-studio-check` runs it. Python API: `check_project`, `Problem`,
   `ProblemKind`, `ProjectError`.
+- `erdify-studio place --auto [path]`: gives every entity and foreign box without a
+  position one next to a placed box it is connected with (right, below, left or above),
+  else the first free slot of a grid right of the diagram; placed boxes never move. Drops
+  stale entries and diagrams, keeps positions of existing enums, and creates the layout
+  file with every diagram when there is none. Deterministic: the same input gives the
+  same bytes, the file is only written when something changed, and `check` passes
+  afterwards. Python API: `place_project`, `PlaceResult`.
 - `[tool.erdify-studio]` in `pyproject.toml`: `layout` (default `erdify-layout.json`
   next to the `pyproject.toml` erdify resolves, else the working directory),
   `group_by` (`auto` | `schema` | `app` | `module` | `none`) and `export_dir`.

@@ -24,6 +24,7 @@ from erdify_studio._layout import (
     loads_layout,
     save_layout,
 )
+from erdify_studio._place import PlaceResult, place_project
 
 try:
     __version__ = version("erdify-studio")
@@ -40,6 +41,7 @@ __all__ = [
     "Layout",
     "LayoutError",
     "LayoutVersionError",
+    "PlaceResult",
     "Position",
     "Problem",
     "ProblemKind",
@@ -56,5 +58,6 @@ __all__ = [
     "load_config",
     "load_layout",
     "loads_layout",
+    "place_project",
     "save_layout",
 ]
