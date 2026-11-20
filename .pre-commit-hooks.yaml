@@ -9,7 +9,8 @@
 #
 # The hook runs when a models.py, a .sql file, the layout file or pyproject.toml
 # changes; override `files` if your models or layout live elsewhere. For SQL DDL
-# add `additional_dependencies: ['erdify[sql]']`.
+# add `additional_dependencies: ['erdify[sql]']`. Deleting a file does not trigger
+# pre-commit hooks: also run `erdify-studio check` in CI.
 
 - id: erdify-studio-check
   name: Check erdify-studio layout is up to date

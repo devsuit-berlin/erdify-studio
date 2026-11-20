@@ -44,7 +44,8 @@ erdify-studio check [path]   # path: the input erdify reads (default: .)
 
 Exits 1 with one line per problem when an entity or a foreign box (an entity of
 another group connected by a relationship) has no position in a diagram, or the
-layout file holds entries or diagrams that no longer exist; the last line suggests
+layout file holds entries or diagrams that no longer exist, or there is no layout file
+yet (missing or empty); the last line suggests
 `erdify-studio place --auto`. Exits 0 without output when the layout is up to date,
 and 2 when the project, its config or the layout file cannot be read (a model file
 erdify cannot parse included, whatever `strict` says), or erdify finds
@@ -65,7 +66,9 @@ repos:
 ```
 
 The hook runs when a `models.py`, a `.sql` file, `erdify-layout.json` or
-`pyproject.toml` changes; override `files` for other names.
+`pyproject.toml` changes; override `files` for other names. Deleting a file does not
+trigger pre-commit hooks, so also run `erdify-studio check` (or
+`pre-commit run --all-files`) in CI.
 
 ## Configuration
 
