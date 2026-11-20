@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, useId } from "vue";
 
 import type { Box, FieldRow, Metrics } from "../api";
 import { FONT_ADVANCE, FONT_FAMILY, MARKER_CHARS } from "../drawing";
@@ -15,10 +15,12 @@ const props = defineProps<{
 
 const fontSize = computed(() => props.metrics.charWidth / FONT_ADVANCE);
 const inset = computed(() => props.metrics.padding / 2);
-const clipId = computed(() => `clip-${props.box.key.replace(/[^A-Za-z0-9_-]/g, "_")}`);
+// Unique per box: sanitised keys could collide (a.b / a_b).
+const clipId = `clip-${useId()}`;
 
 function badges(row: FieldRow): string {
-  return [row.pk && "PK", row.fk && "FK", row.uk && "UK"].filter(Boolean).join(" ");
+  // A primary key is unique anyway; "PK FK UK" would not fit the 6 reserved characters.
+  return [row.pk && "PK", row.fk && "FK", row.uk && !row.pk && "UK"].filter(Boolean).join(" ");
 }
 
 function isField(row: unknown): row is FieldRow {

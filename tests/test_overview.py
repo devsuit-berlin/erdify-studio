@@ -352,8 +352,6 @@ def _with(key: str, value: object) -> dict[str, object]:
 @pytest.mark.parametrize(
     ("positions", "message"),
     [
-        (_without("core.customers"), "'core.customers'"),
-        (_with("gone.table", [0, 0]), "'gone.table'"),
         (_with("core.customers", [1]), "'core.customers'"),
         (_with("core.customers", [1, 2, 3]), "'core.customers'"),
         (_with("core.customers", ["1", 2]), "'core.customers'"),
@@ -365,8 +363,6 @@ def _with(key: str, value: object) -> dict[str, object]:
         (None, "positions"),
     ],
     ids=[
-        "missing",
-        "unknown",
         "short",
         "long",
         "string",
@@ -386,6 +382,24 @@ def test_save_refuses_bad_positions(tmp_path: Path, positions: object, message: 
     with pytest.raises(PositionsError, match=message):
         _save(root, positions, layout_revision(path))
     assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    ("positions", "key"),
+    [
+        (_without("core.customers"), "'core.customers'"),
+        (_with("gone.table", [0, 0]), "'gone.table'"),
+    ],
+    ids=["missing", "unknown"],
+)
+def test_save_conflicts_when_the_models_changed(
+    tmp_path: Path, positions: object, key: str
+) -> None:
+    """Other boxes than the page shows: the models changed since it loaded."""
+    root = _project(tmp_path)
+    with pytest.raises(LayoutConflictError, match=f"models changed.*{key}"):
+        _save(root, positions)
+    assert not (root / "erdify-layout.json").exists()
 
 
 def test_save_conflicts_when_the_file_changed(tmp_path: Path) -> None:

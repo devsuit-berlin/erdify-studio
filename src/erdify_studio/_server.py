@@ -7,6 +7,10 @@ token of the URL the browser was opened with.
 
 Routes: ``GET /`` and ``GET /assets/*`` (the built frontend), ``GET /api/overview``
 (``build_overview``) and ``PUT /api/layout`` (``save_overview``).
+
+The project is loaded again for every API request, so a reload after a ``git
+checkout`` or a model change shows the current models instead of treating their
+positions as stale.
 """
 
 from __future__ import annotations
@@ -15,12 +19,14 @@ import json
 import logging
 import secrets
 import threading
+from collections.abc import Callable
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
+import erdify
 from erdify import Project
 
 from erdify_studio._config import StudioConfig
@@ -31,6 +37,16 @@ logger = logging.getLogger(__name__)
 
 #: The built frontend shipped in the package.
 STATIC_DIR = Path(__file__).parent / "_static"
+#: Loads the project and its studio settings (``erdify.load_project`` + ``load_config``).
+ProjectLoader = Callable[[], tuple[Project, StudioConfig]]
+#: What loading a project or reading the layout file may raise.
+_LOAD_ERRORS = (
+    StudioError,
+    OSError,
+    erdify.ConfigError,
+    erdify.ModelParseError,
+    erdify.SqlDependencyError,
+)
 #: Largest request body accepted, in bytes.
 MAX_BODY = 10 * 1024 * 1024
 
@@ -61,15 +77,13 @@ class StudioServer(ThreadingHTTPServer):
 
     def __init__(
         self,
-        project: Project,
-        config: StudioConfig,
+        load: ProjectLoader,
         *,
         port: int,
         static_dir: Path,
         shown_path: str,
     ) -> None:
-        self.project = project
-        self.config = config
+        self.load = load
         self.static_dir = static_dir.resolve()
         self.shown_path = shown_path
         self.token = secrets.token_urlsafe(32)
@@ -88,26 +102,25 @@ class StudioServer(ThreadingHTTPServer):
 
 
 def start_server(
-    project: Project,
-    config: StudioConfig,
+    load: ProjectLoader,
     *,
     port: int = 0,
-    static_dir: Path = STATIC_DIR,
+    static_dir: Path | None = None,
     shown_path: str,
 ) -> StudioServer:
-    """Bind a studio server for ``project`` on 127.0.0.1 (not serving yet).
+    """Bind a studio server on 127.0.0.1 (not serving yet).
 
     Args:
-        project: The project as ``erdify.load_project(..., strict=True)`` returns it.
-        config: Its studio settings.
+        load: Loads the project (``strict=True``) and its studio settings; called for
+            every API request.
         port: The port; 0 picks a free one.
-        static_dir: The built frontend to serve.
+        static_dir: The built frontend to serve (default: ``STATIC_DIR``).
         shown_path: The layout file's path as the UI shows it.
 
     Raises:
         OSError: The port cannot be bound (e.g. it is in use).
     """
-    return StudioServer(project, config, port=port, static_dir=static_dir, shown_path=shown_path)
+    return StudioServer(load, port=port, static_dir=static_dir or STATIC_DIR, shown_path=shown_path)
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -184,7 +197,7 @@ class _Handler(BaseHTTPRequestHandler):
             path = "/index.html"
         relative = unquote(path)[1:]
         parts = relative.split("/")
-        if "\\" in relative or any(part in ("", ".", "..") for part in parts):
+        if "\\" in relative or "\0" in relative or any(part in ("", ".", "..") for part in parts):
             return None
         file = self.server.static_dir.joinpath(*parts).resolve()
         if not file.is_relative_to(self.server.static_dir) or not file.is_file():
@@ -193,10 +206,9 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _overview(self) -> None:
         try:
-            overview = build_overview(
-                self.server.project, self.server.config, shown_path=self.server.shown_path
-            )
-        except (StudioError, OSError) as e:
+            project, config = self.server.load()
+            overview = build_overview(project, config, shown_path=self.server.shown_path)
+        except _LOAD_ERRORS as e:
             self._error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
             return
         self._json(HTTPStatus.OK, overview)
@@ -207,17 +219,13 @@ class _Handler(BaseHTTPRequestHandler):
             return
         try:
             with self.server.save_lock:
-                revision = save_overview(
-                    self.server.project,
-                    self.server.config,
-                    payload["positions"],
-                    payload["revision"],
-                )
+                project, config = self.server.load()
+                revision = save_overview(project, config, payload["positions"], payload["revision"])
         except PositionsError as e:
             self._error(HTTPStatus.BAD_REQUEST, str(e))
         except LayoutConflictError as e:
             self._error(HTTPStatus.CONFLICT, str(e))
-        except (StudioError, OSError) as e:
+        except _LOAD_ERRORS as e:
             self._error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
         else:
             self._json(HTTPStatus.OK, {"saved": self.server.shown_path, "revision": revision})

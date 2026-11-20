@@ -201,8 +201,10 @@ def save_overview(
 
     Raises:
         LayoutConflictError: The file's revision is not ``revision`` any more.
-        PositionsError: ``positions`` does not give every overview box (and only
-            those) a finite position within the coordinate limit.
+        LayoutConflictError: ``positions`` has other boxes than the overview: the
+            models changed since the page loaded.
+        PositionsError: A position is not a pair of finite numbers within the
+            coordinate limit.
         LayoutError: The layout file cannot be read or written (see ``save_layout``).
     """
     current = layout_revision(config.layout)
@@ -229,13 +231,17 @@ def _checked(positions: object, shown: frozenset[str]) -> dict[str, tuple[float,
     """``positions`` narrowed to key -> ``(x, y)`` numbers, with exactly the ``shown`` keys."""
     if not isinstance(positions, Mapping):
         raise PositionsError(f"positions must be an object, got {type(positions).__name__!r}")
+    # Other boxes than the overview has: the page was loaded before the models
+    # changed (e.g. a `git checkout`). Saving would drop the positions it lacks.
     missing = sorted(shown - positions.keys())
-    if missing:
-        raise PositionsError(f"no position for {missing[0]!r} ({len(missing)} missing)")
+    unknown = sorted(positions.keys() - shown)
+    if missing or unknown:
+        first = f"no box {unknown[0]!r} any more" if unknown else f"new box {missing[0]!r}"
+        raise LayoutConflictError(
+            f"the models changed since the page loaded ({first}); reload the page"
+        )
     checked: dict[str, tuple[float, float]] = {}
     for key, value in positions.items():
-        if key not in shown:
-            raise PositionsError(f"{key!r} is not a box of the overview")
         if (
             not isinstance(value, list)
             or len(value) != 2

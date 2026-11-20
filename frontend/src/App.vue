@@ -25,10 +25,10 @@ const banner = computed(() => {
   const loaded = overview.value;
   if (!loaded || !pendingShown.value) return null;
   const { placed, groupChanges, created } = loaded.pending;
-  if (created) return `No layout file yet — save to create ${loaded.layoutPath}.`;
   if (placed) {
     return `${placed} new ${placed === 1 ? "box was" : "boxes were"} placed automatically — save to keep them.`;
   }
+  if (created) return `No layout file yet — save to create ${loaded.layoutPath}.`;
   if (groupChanges) {
     return `The layout file is out of date in ${groupChanges} group-diagram ${groupChanges === 1 ? "entry" : "entries"} — save to update it.`;
   }
@@ -52,20 +52,26 @@ async function save(): Promise<void> {
       moved.value = edits !== editsAtSave;
       pendingShown.value = false;
       newKeys.value = new Set();
+      toast.remove(SAVE_ERROR);
       toast.add({ title: `Saved to ${outcome.saved}`, color: "success", icon: "i-lucide-check" });
     } else if (outcome.conflict) {
-      toast.add({
-        title: "The layout file changed since this page loaded (on disk or from another tab). Reload to get it — saving now would overwrite it.",
-        color: "error",
-        icon: "i-lucide-circle-alert",
-        duration: 0,
-      });
+      showError(
+        "The layout file or the models changed since this page loaded (on disk or from another tab). Reload to get them — saving now would overwrite them.",
+      );
     } else {
-      toast.add({ title: `Could not save: ${outcome.message}`, color: "error", icon: "i-lucide-circle-alert", duration: 0 });
+      showError(`Could not save: ${outcome.message}`);
     }
   } finally {
     saving.value = false;
   }
+}
+
+// One sticky error toast at a time: adding it again with the same id updates the open
+// one instead of stacking (removing it first would let its exit animation drop the new one).
+const SAVE_ERROR = "save-error";
+
+function showError(title: string): void {
+  toast.add({ id: SAVE_ERROR, title, color: "error", icon: "i-lucide-circle-alert", duration: 0 });
 }
 
 function onKey(event: KeyboardEvent): void {

@@ -3,7 +3,7 @@
 import http.client
 import json
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,7 +11,7 @@ from typing import Any
 import erdify
 import pytest
 
-from erdify_studio import load_config, place_project
+from erdify_studio import StudioConfig, load_config, place_project
 from erdify_studio._overview import build_overview, layout_revision
 from erdify_studio._server import StudioServer, start_server
 
@@ -85,6 +85,14 @@ def _project(root: Path) -> Path:
     return root
 
 
+def _loader(root: Path) -> Callable[[], tuple[erdify.Project, StudioConfig]]:
+    def load() -> tuple[erdify.Project, StudioConfig]:
+        project = erdify.load_project(root, strict=True)
+        return project, load_config(project.settings.pyproject)
+
+    return load
+
+
 def _static(root: Path) -> Path:
     static = root / "static"
     (static / "assets").mkdir(parents=True)
@@ -97,9 +105,7 @@ def _static(root: Path) -> Path:
 @pytest.fixture
 def studio(tmp_path: Path) -> Iterator[Studio]:
     root = _project(tmp_path / "project")
-    project = erdify.load_project(root, strict=True)
-    config = load_config(project.settings.pyproject)
-    server = start_server(project, config, static_dir=_static(tmp_path), shown_path=SHOWN)
+    server = start_server(_loader(root), static_dir=_static(tmp_path), shown_path=SHOWN)
     thread = threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True)
     thread.start()
     try:
@@ -137,10 +143,7 @@ def test_url_carries_the_token(studio: Studio) -> None:
 
 
 def test_tokens_differ_per_server(studio: Studio, tmp_path: Path) -> None:
-    project = erdify.load_project(studio.root, strict=True)
-    other = start_server(
-        project, load_config(project.settings.pyproject), static_dir=tmp_path, shown_path=SHOWN
-    )
+    other = start_server(_loader(studio.root), static_dir=tmp_path, shown_path=SHOWN)
     other.server_close()
     assert other.token != studio.server.token
 
@@ -181,6 +184,8 @@ def test_serves_assets_with_their_type(studio: Studio, path: str, content_type: 
         "//etc/passwd",
         "/assets/missing.js",
         "/assets",
+        "/%00",
+        "/assets/app.js%00.html",
     ],
 )
 def test_paths_outside_static_or_missing_are_404(studio: Studio, path: str) -> None:
@@ -254,7 +259,8 @@ def test_put_layout_saves(studio: Studio) -> None:
 
 
 def test_put_layout_bad_positions_is_400(studio: Studio) -> None:
-    status, _, body = studio.put_layout({"revision": None, "positions": {"x": [True, 1]}})
+    positions: dict[str, object] = {**_positions(studio), "customers": [True, 1]}
+    status, _, body = studio.put_layout({"revision": None, "positions": positions})
     assert (status, "error" in _json(body)) == (400, True)
     assert not (studio.root / SHOWN).exists()
 
@@ -325,3 +331,32 @@ def test_unknown_api_route_is_404(studio: Studio) -> None:
 def test_other_methods_are_405(studio: Studio, method: str, path: str) -> None:
     status, _, _ = studio.request(method, path, b"{}")
     assert status == 405
+
+
+# --- the models are read per request ---------------------------------------------
+
+ORDER = """
+
+class Order(SQLModel, table=True):
+    __tablename__ = "orders"
+    id: int = Field(primary_key=True)
+"""
+
+
+def test_a_reload_shows_changed_models(studio: Studio) -> None:
+    (studio.root / "shop" / "models.py").write_text(MODELS + ORDER)
+    assert "orders" in _positions(studio)
+
+
+def test_saving_from_a_page_with_old_models_is_409(studio: Studio) -> None:
+    positions = _positions(studio)
+    (studio.root / "shop" / "models.py").write_text(MODELS + ORDER)
+    status, _, body = studio.put_layout({"revision": None, "positions": positions})
+    assert (status, "models changed" in _json(body)["error"]) == (409, True)
+    assert not (studio.root / SHOWN).exists()
+
+
+def test_a_parse_error_after_start_is_500(studio: Studio) -> None:
+    (studio.root / "shop" / "models.py").write_text("class Broken(:\n")
+    status, _, body = studio.request("GET", "/api/overview")
+    assert (status, "error" in _json(body)) == (500, True)

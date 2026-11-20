@@ -29,6 +29,16 @@ def _project(root: Path, models: str = MODELS) -> Path:
     return root
 
 
+@pytest.fixture(autouse=True)
+def built_frontend(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A built frontend, so the tests don't depend on `poe frontend` having run."""
+    static = tmp_path / "static"
+    static.mkdir()
+    (static / "index.html").write_text("<!doctype html>")
+    monkeypatch.setattr(_server, "STATIC_DIR", static)
+    return static
+
+
 @pytest.fixture
 def opened(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[str]]:
     """Serving stops at once (as on Ctrl+C); returns the URLs opened in a browser."""
@@ -135,3 +145,15 @@ def test_a_broken_layout_file_exits_2(
     (root / "erdify-layout.json").write_text("<<<<<<< HEAD\n")
     assert main([str(root)]) == 2
     assert opened == []
+
+
+def test_a_missing_frontend_build_exits_2(
+    tmp_path: Path,
+    opened: list[str],
+    built_frontend: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (built_frontend / "index.html").unlink()
+    assert main([str(_project(tmp_path / "p"))]) == 2
+    assert opened == []
+    assert "uv run poe frontend" in capsys.readouterr().err

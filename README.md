@@ -55,11 +55,13 @@ erdify's own, with crow's-foot ends.
   entries are dropped), so `check` passes afterwards.
 - Boxes without a position are placed like `place --auto` does and marked **NEW** until
   you save.
-- If the layout file changed after the page loaded (a `git checkout`, another tab),
-  Save refuses instead of overwriting it: reload the page.
+- If the layout file or the models changed after the page loaded (a `git checkout`,
+  another tab), Save refuses instead of overwriting them: reload the page, which reads
+  both again.
 - Closing the tab with unsaved changes asks first.
 
-Like `check`, it exits 2 without starting when the project, its config or the layout
+Like `check`, it exits 2 without starting when the canvas is not built (a source
+checkout without `uv run poe frontend`), when the project, its config or the layout
 file cannot be read, or erdify finds no entities. The page talks to the local server
 only: no CDN, fonts and icons ship in the wheel, and the API needs the random token in
 the URL it opens, so other web pages cannot change your layout.

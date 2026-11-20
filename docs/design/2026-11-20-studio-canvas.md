@@ -20,7 +20,9 @@ hand-made layout that survives schema changes.
 
 - Group diagrams, foreign boxes and a diagram switcher (#6).
 - SVG export (later issue) — but the drawing must be reusable for it (see Approaches).
-- Reloading the project or watching files: the project is read once at startup.
+- Watching files: the page changes only on a reload. (The project is read per API
+  request, so a reload after a `git checkout` shows the current models — PR #19
+  review: reading it once made a reload drop the positions of new tables on Save.)
 - Orthogonal edge routing, minimap, snapping, undo.
 
 ## Anti-goals
@@ -196,7 +198,8 @@ UI texts:
 | Group changes only | The layout file is out of date in N group-diagram entries — save to update it. |
 | Saved | Saved to `<path>` |
 | Save failed | Could not save: `<message>` (stays until dismissed) |
-| File changed (409) | The layout file changed since this page loaded (on disk or from another tab). Reload to get it — saving now would overwrite it. |
+| File or models changed (409) | The layout file or the models changed since this page loaded (on disk or from another tab). Reload to get them — saving now would overwrite them. |
+| No layout file yet (no new boxes counted) | No layout file yet — save to create `<path>`. |
 | Empty | No entities found in `<path>`. |
 
 ### Checks and tests
