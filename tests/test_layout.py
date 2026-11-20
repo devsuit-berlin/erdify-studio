@@ -91,6 +91,18 @@ def test_unknown_version_is_refused(tmp_path: Path) -> None:
         load_layout(path)
 
 
+def test_an_old_or_invalid_version_number_has_no_upgrade_hint() -> None:
+    with pytest.raises(LayoutVersionError, match="unknown layout file version 0") as exc:
+        loads_layout('{"version": 0, "diagrams": {}}')
+    assert "upgrade" not in str(exc.value)
+
+
+def test_a_malformed_version_is_not_a_version_error() -> None:
+    with pytest.raises(LayoutError) as exc:
+        loads_layout('{"version": "2", "diagrams": {}}')
+    assert not isinstance(exc.value, LayoutVersionError)
+
+
 def test_save_does_not_overwrite_a_file_of_an_unknown_version(tmp_path: Path) -> None:
     path = tmp_path / "erdify-layout.json"
     original = '{"version": 2, "diagrams": {"_overview": {"a": [1, 2]}}}\n'
@@ -191,10 +203,73 @@ def test_failed_save_keeps_the_old_file_and_leaves_no_temp_file(
         raise OSError("disk full")
 
     monkeypatch.setattr(os, "replace", fail)
-    with pytest.raises(OSError, match="disk full"):
+    with pytest.raises(LayoutError, match="cannot write .*disk full"):
         save_layout(Layout(), path)
     assert path.read_text() == EXPECTED
     assert [p.name for p in tmp_path.iterdir()] == ["erdify-layout.json"]
+
+
+def test_save_flushes_to_disk_before_replacing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[str] = []
+    real_fsync, real_replace = os.fsync, os.replace
+
+    def fsync(fd: int) -> None:
+        calls.append("fsync")
+        real_fsync(fd)
+
+    def replace(src: str, dst: str) -> None:
+        calls.append("replace")
+        real_replace(src, dst)
+
+    monkeypatch.setattr(os, "fsync", fsync)
+    monkeypatch.setattr(os, "replace", replace)
+    save_layout(_layout(), tmp_path / "erdify-layout.json")
+    assert calls == ["fsync", "replace"]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")
+def test_save_through_a_symlink_updates_the_target(tmp_path: Path) -> None:
+    target = tmp_path / "shared" / "erdify-layout.json"
+    save_layout(Layout(), target)
+    link = tmp_path / "erdify-layout.json"
+    link.symlink_to(target)
+    save_layout(_layout(), link)
+    assert link.is_symlink()
+    assert target.read_text() == EXPECTED
+
+
+def test_a_folder_as_layout_path_is_a_layout_error(tmp_path: Path) -> None:
+    with pytest.raises(LayoutError, match="cannot read"):
+        load_layout(tmp_path)
+    with pytest.raises(LayoutError, match="not overwriting .*cannot read"):
+        save_layout(_layout(), tmp_path)
+
+
+def test_an_unwritable_folder_is_a_layout_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fail(*args: object, **kwargs: object) -> None:
+        raise PermissionError("permission denied")
+
+    monkeypatch.setattr(Path, "mkdir", fail)
+    with pytest.raises(LayoutError, match="cannot write .*permission denied"):
+        save_layout(_layout(), tmp_path / "docs" / "erdify-layout.json")
+
+
+def test_an_unreadable_existing_file_is_a_layout_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "erdify-layout.json"
+    save_layout(_layout(), path)
+
+    def fail(*args: object, **kwargs: object) -> None:
+        raise PermissionError("permission denied")
+
+    monkeypatch.setattr(Path, "stat", fail)
+    with pytest.raises(LayoutError, match="cannot write .*permission denied"):
+        save_layout(_layout(), path)
 
 
 def test_missing_file_raises_file_not_found(tmp_path: Path) -> None:
@@ -208,9 +283,9 @@ def test_missing_file_raises_file_not_found(tmp_path: Path) -> None:
         ("<<<<<<< HEAD\n", "not valid JSON"),
         ("[]", "must be a JSON object"),
         ('{"diagrams": {}}', "no 'version'"),
-        ('{"version": "1", "diagrams": {}}', "version '1'"),
-        ('{"version": 1.0, "diagrams": {}}', "version 1.0"),
-        ('{"version": true, "diagrams": {}}', "version True"),
+        ('{"version": "1", "diagrams": {}}', "'version' must be an integer, got '1'"),
+        ('{"version": 1.0, "diagrams": {}}', "'version' must be an integer, got 1.0"),
+        ('{"version": true, "diagrams": {}}', "'version' must be an integer, got True"),
         ('{"version": 1}', "'diagrams' must be an object"),
         ('{"version": 1, "diagrams": []}', "'diagrams' must be an object"),
         ('{"version": 1, "diagrams": {}, "extra": 1}', "unknown key 'extra'"),

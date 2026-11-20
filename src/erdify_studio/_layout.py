@@ -145,61 +145,77 @@ def load_layout(path: Path) -> Layout:
     Raises:
         FileNotFoundError: There is no layout file yet.
         LayoutVersionError: The file is of another ``version``.
-        LayoutError: The file is not a valid layout.
+        LayoutError: The file cannot be read or is not a valid layout.
     """
-    try:
-        text = path.read_text(encoding="utf-8-sig")  # tolerate a BOM added by an editor
-    except UnicodeDecodeError as e:
-        raise LayoutError(f"{str(path)!r} is not UTF-8: {e}") from None
-    return loads_layout(text, source=str(path))
+    return loads_layout(_read(path), source=str(path))
 
 
 def save_layout(layout: Layout, path: Path) -> None:
     """Write ``layout`` to ``path``, creating missing folders.
 
-    The file is replaced atomically and keeps its permissions (POSIX mode bits; on
-    Windows only the read-only flag exists). An existing file is
-    only replaced when it is a valid layout of this version: a file of another
-    ``version`` may hold positions this erdify-studio cannot read, and a broken one
-    (e.g. with git conflict markers) holds positions that must not be lost silently.
+    The file is replaced atomically (written to a temporary file, flushed to disk,
+    then renamed over it) and keeps its permissions (POSIX mode bits; on Windows
+    only the read-only flag exists). A symlinked ``path`` updates the file it
+    points to. An existing file is only replaced when it is a valid layout of this
+    version or empty: a file of another ``version`` may hold positions this
+    erdify-studio cannot read, and a broken one (e.g. with git conflict markers)
+    holds positions that must not be lost silently.
 
     Raises:
         LayoutVersionError: ``path`` holds a layout of another version.
-        LayoutError: ``path`` exists but is not a valid layout; fix or remove it first.
+        LayoutError: ``path`` exists but is not a valid layout (fix or remove it
+            first), or it cannot be written.
     """
     text = dumps_layout(layout)
+    target = path.resolve()
     try:
-        mode: int | None = path.stat().st_mode & 0o777
+        mode: int | None = target.stat().st_mode & 0o777
     except FileNotFoundError:
         mode = None  # new file: the temp file gets the umask, like any new file
+    except OSError as e:
+        raise LayoutError(f"cannot write {str(path)!r}: {e}") from e
     else:
-        _refuse_to_lose_positions(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+        _refuse_to_lose_positions(target, source=str(path))
+    tmp = target.with_name(f".{target.name}.{secrets.token_hex(8)}.tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-            f.write(text)
-        if mode is not None:
-            os.chmod(tmp, mode)
-        os.replace(tmp, path)
-    except BaseException:
-        tmp.unlink(missing_ok=True)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+                f.write(text)
+                f.flush()
+                os.fsync(f.fileno())
+            if mode is not None:
+                os.chmod(tmp, mode)
+            os.replace(tmp, target)
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
+    except OSError as e:
+        raise LayoutError(f"cannot write {str(path)!r}: {e}") from e
+
+
+def _read(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8-sig")  # tolerate a BOM added by an editor
+    except FileNotFoundError:
         raise
+    except UnicodeDecodeError as e:
+        raise LayoutError(f"{str(path)!r} is not UTF-8: {e}") from None
+    except OSError as e:
+        raise LayoutError(f"cannot read {str(path)!r}: {e}") from None
 
 
-def _refuse_to_lose_positions(path: Path) -> None:
+def _refuse_to_lose_positions(path: Path, *, source: str) -> None:
     """Raise unless replacing the existing ``path`` loses nothing."""
     try:
-        if not path.read_text(encoding="utf-8-sig").strip():
-            return  # an empty file (e.g. from `touch`) holds no positions
-        load_layout(path)
+        text = _read(path)
+        if text.strip():  # an empty file (e.g. from `touch`) holds no positions
+            loads_layout(text, source=source)
     except LayoutVersionError:
         raise
     except LayoutError as e:
-        raise LayoutError(f"not overwriting {str(path)!r}, it is not a valid layout: {e}") from e
-    except UnicodeDecodeError as e:
-        raise LayoutError(f"not overwriting {str(path)!r}, it is not UTF-8: {e}") from e
+        raise LayoutError(f"not overwriting {source!r}: {e}") from e
 
 
 class _DuplicateKey(Exception):
@@ -220,10 +236,17 @@ def _check_version(data: dict[str, object], source: str) -> None:
     if "version" not in data:
         raise LayoutError(f"{source} has no 'version'")
     version = data["version"]
-    if type(version) is not int or version != LAYOUT_VERSION:
+    if type(version) is not int:
+        raise LayoutError(f"'version' must be an integer, got {version!r} in {source}")
+    if version > LAYOUT_VERSION:
         raise LayoutVersionError(
-            f"layout file version {version!r} in {source}: this erdify-studio supports "
+            f"layout file version {version} in {source}: this erdify-studio supports "
             f"{LAYOUT_VERSION}; upgrade erdify-studio to read it"
+        )
+    if version != LAYOUT_VERSION:
+        raise LayoutVersionError(
+            f"unknown layout file version {version} in {source}: "
+            f"this erdify-studio supports {LAYOUT_VERSION}"
         )
 
 
