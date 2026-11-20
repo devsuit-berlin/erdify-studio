@@ -36,6 +36,25 @@ erdify-studio export [path]        # write deterministic SVGs
 Options and sources come from erdify's config (`[tool.erdify]` in `pyproject.toml`)
 plus a `[tool.erdify-studio]` section.
 
+## Configuration
+
+```toml
+[tool.erdify-studio]
+layout = "docs/erd/erdify-layout.json"   # default: erdify-layout.json next to pyproject.toml
+group_by = "auto"                        # auto | schema | app | module | none
+export_dir = "docs/erd"                  # optional; omitted = no committed SVGs
+```
+
+`group_by = "auto"` picks, per entity, its database schema, else its Django app, else its
+Python module. Entities are keyed in the layout file by `schema.table` (or `table`), so
+renaming a class keeps its position.
+
+## Known limitations
+
+- SQL DDL with same-name tables in different schemas (`core.customer`, `mart.customer`)
+  is read as one table by erdify for now
+  ([erdify#353](https://github.com/devsuit-berlin/erdify/issues/353)).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md).
