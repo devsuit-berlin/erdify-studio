@@ -46,12 +46,39 @@ def test_enum_key() -> None:
     assert enum_key(EnumInfo(name="Status", values=["a"])) == "enum:Status"
 
 
-def test_two_entities_with_the_same_key_are_an_error_naming_both() -> None:
+def test_same_name_classes_in_two_modules_are_keyed_by_their_erdify_names() -> None:
+    """erdify (#367) names namesakes ``module.Class``; their table names stay equal."""
+    entities = {
+        "billing.models.Address": _entity(
+            "billing.models.Address", "address", module="billing.models"
+        ),
+        "shipping.models.Address": _entity(
+            "shipping.models.Address", "address", module="shipping.models"
+        ),
+        "Invoice": _entity("Invoice", "invoice", module="billing.models"),
+    }
+    assert entity_keys(entities) == {
+        "billing.models.Address": "billing.models.Address",
+        "shipping.models.Address": "shipping.models.Address",
+        "Invoice": "invoice",
+    }
+
+
+def test_two_classes_of_one_table_are_keyed_by_their_names() -> None:
     entities = {
         "Address": _entity("Address", "address", module="billing.models"),
         "ShippingAddress": _entity("ShippingAddress", "address", module="shipping.models"),
     }
-    with pytest.raises(DuplicateKeyError, match=r"'Address' and 'ShippingAddress'.*'address'"):
+    assert entity_keys(entities) == {"Address": "Address", "ShippingAddress": "ShippingAddress"}
+
+
+def test_a_name_key_equal_to_another_key_is_an_error_naming_both() -> None:
+    entities = {
+        "Address": _entity("Address", "x"),
+        "Other": _entity("Other", "x"),
+        "Plain": _entity("Plain", "Address"),
+    }
+    with pytest.raises(DuplicateKeyError, match=r"'Address' and 'Plain'.*'Address'"):
         entity_keys(entities)
 
 

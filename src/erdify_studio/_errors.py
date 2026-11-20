@@ -18,7 +18,7 @@ class LayoutVersionError(LayoutError):
 
 
 class DuplicateKeyError(LayoutError):
-    """Two entities map to the same layout key."""
+    """An entity keyed by its erdify name (its own key was shared) has another entity's key."""
 
 
 class ProjectError(StudioError):

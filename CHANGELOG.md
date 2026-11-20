@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Entities that would share a layout key are keyed by erdify's entity name instead of
+  being refused: same-name model classes in different modules, which the next erdify
+  release draws as `module.Class` (erdify#367), and several classes of one table. A
+  unique key is unchanged; `DuplicateKeyError` remains for a name key that equals
+  another entity's key.
 - `erdify-studio [path]` (also `erdify-studio open`, with `--port` and `--no-browser`):
   serves the overview diagram on 127.0.0.1 and opens it in the browser. Boxes show the
   fields erdify shows and erdify's edges with crow's-foot ends; dragging a box moves its

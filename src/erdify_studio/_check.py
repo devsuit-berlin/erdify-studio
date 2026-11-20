@@ -88,7 +88,7 @@ def diagram_contents(
     overview shows every one, a group diagram those its own entities use.
 
     Raises:
-        DuplicateKeyError: Two entities have the same layout key.
+        DuplicateKeyError: An entity keyed by its erdify name has another entity's key.
         LayoutError: A group value is a reserved diagram name.
     """
     keys = entity_keys(entities)
@@ -163,7 +163,7 @@ def check_project(project: Project, config: StudioConfig) -> list[Problem] | Non
     Raises:
         ProjectError: The project has no entities and erdify's ``allow_empty`` is
             off, as ``erdify`` refuses it: every position would read as stale.
-        DuplicateKeyError: Two entities have the same layout key.
+        DuplicateKeyError: An entity keyed by its erdify name has another entity's key.
         LayoutVersionError: The layout file is of another version.
         LayoutError: A reserved group name, or a layout file that cannot be read.
     """
@@ -180,7 +180,7 @@ def project_diagrams(project: Project, config: StudioConfig) -> dict[str, Diagra
     Raises:
         ProjectError: The project has no entities and erdify's ``allow_empty`` is
             off, as ``erdify`` refuses it: every position would read as stale.
-        DuplicateKeyError: Two entities have the same layout key.
+        DuplicateKeyError: An entity keyed by its erdify name has another entity's key.
         LayoutError: A group value is a reserved diagram name.
     """
     if not project.entities and not project.settings.allow_empty:
