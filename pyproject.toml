@@ -62,6 +62,7 @@ format = { help = "Format", cmd = "ruff format ." }
 frontend = { help = "Build the frontend into src/erdify_studio/_static", shell = "npm --prefix frontend ci --ignore-scripts --no-audit --no-fund && npm --prefix frontend run build" }
 build = { help = "Build sdist + wheel into dist/ (run `poe frontend` first)", cmd = "uv build" }
 check-wheel = { help = "Check the built wheel ships the frontend", cmd = "python scripts/check_wheel.py dist" }
+check-static = { help = "Check the built frontend loads nothing from the network", cmd = "python scripts/check_static.py" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

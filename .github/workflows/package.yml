@@ -32,6 +32,8 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           npm run build
+      - name: The built frontend loads nothing from the network
+        run: uv run --frozen python scripts/check_static.py
       - run: uv build
       - run: uv run --frozen python scripts/check_wheel.py dist
       - name: Install the wheel without Node and run the CLI
