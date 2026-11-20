@@ -1,3 +1,5 @@
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import ui from "@nuxt/ui/vite";
@@ -28,9 +30,64 @@ function offlineIcons(): Plugin {
 // The build lands inside the Python package so the wheel ships it (see pyproject.toml,
 // [tool.hatch.build.targets.wheel] artifacts). Relative base: the Python server decides
 // the URL prefix.
+// Packages that reach the build outside the JS module graph (CSS @import, generated
+// icon data), so thirdPartyLicenses() cannot find them on its own.
+const EXTRA_LICENSED = ["@fontsource/jetbrains-mono", "@iconify-json/lucide"];
+
+/** The package directory under node_modules that a module id belongs to. */
+function packageDir(id: string): string | null {
+  const match = /^(.*[\\/]node_modules[\\/](?:@[^\\/]+[\\/])?[^\\/]+)/.exec(id.replace(/^\0/, ""));
+  return match ? match[1] : null;
+}
+
+// Emits THIRD_PARTY_LICENSES.txt: the licence text of every package bundled into the
+// shipped page (MIT, ISC, OFL … all require it in copies). scripts/check_wheel.py
+// checks that the wheel has it.
+function thirdPartyLicenses(): Plugin {
+  return {
+    name: "erdify-studio:third-party-licenses",
+    apply: "build",
+    generateBundle(_, bundle) {
+      const dirs = new Set<string>();
+      for (const chunk of Object.values(bundle)) {
+        if (chunk.type !== "chunk") continue;
+        for (const id of Object.keys(chunk.modules)) {
+          const dir = packageDir(id);
+          if (dir) dirs.add(dir);
+        }
+      }
+      const root = dirname(fileURLToPath(import.meta.url));
+      for (const name of EXTRA_LICENSED) dirs.add(join(root, "node_modules", name));
+      const sections = [...dirs]
+        .map((dir) => {
+          const meta = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
+            name: string;
+            version: string;
+            license?: string;
+          };
+          // A package without a licence file needs one in frontend/licenses/ (scope/name -> scope__name.txt).
+          const own = readdirSync(dir).find((f) => /^(licen[cs]e|copying)/i.test(f));
+          const override = join(root, "licenses", `${meta.name.replace("/", "__")}.txt`);
+          const file = own ? join(dir, own) : existsSync(override) ? override : null;
+          if (!file) this.error(`no licence file in ${meta.name}@${meta.version}; add ${override}`);
+          const text = readFileSync(file, "utf8").trim();
+          return { key: meta.name, text: `${meta.name}@${meta.version} (${meta.license ?? "see below"})\n\n${text}\n` };
+        })
+        .sort((a, b) => a.key.localeCompare(b.key));
+      const unique = sections.filter((s, i) => i === 0 || s.key !== sections[i - 1].key);
+      this.emitFile({
+        type: "asset",
+        fileName: "THIRD_PARTY_LICENSES.txt",
+        source: `Third-party code bundled into the erdify-studio canvas.\n\n${unique.map((s) => s.text).join("\n" + "-".repeat(78) + "\n\n")}`,
+      });
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     offlineIcons(),
+    thirdPartyLicenses(),
     vue(),
     ui({
       // No vue-router: the studio is a single page.

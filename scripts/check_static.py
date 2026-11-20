@@ -25,6 +25,8 @@ ALLOWED = frozenset(
         "https://tailwindcss.com",  # Tailwind's license banner comment
     }
 )
+#: Files the page never loads, which may name URLs (the licences of the bundled code).
+NOT_LOADED = frozenset({"THIRD_PARTY_LICENSES.txt"})
 #: Prefixes of URLs that are only shown as text, never fetched.
 ALLOWED_PREFIXES = ("https://vuejs.org/error-reference/",)  # in Vue's error messages
 
@@ -37,7 +39,8 @@ def problems(directory: Path) -> list[str]:
     if not directory.is_dir():
         return [f"{directory}: missing (run `poe frontend` first)"]
     found: list[str] = []
-    for path in sorted(p for p in directory.rglob("*") if p.is_file()):
+    files = (p for p in directory.rglob("*") if p.is_file())
+    for path in sorted(p for p in files if p.relative_to(directory).as_posix() not in NOT_LOADED):
         text = path.read_bytes().decode("utf-8", errors="ignore")
         urls = {m.group(0) for m in _URL.finditer(text)} - ALLOWED
         for url in sorted(u for u in urls if not u.startswith(ALLOWED_PREFIXES)):

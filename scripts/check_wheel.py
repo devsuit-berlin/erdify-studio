@@ -27,6 +27,8 @@ def problems(wheel: Path) -> list[str]:
         found.append(f"{STATIC}index.html is missing (run `poe frontend` before building)")
     if not any(n.startswith(f"{STATIC}assets/") and n.endswith(".js") for n in names):
         found.append(f"no JavaScript bundle under {STATIC}assets/")
+    if f"{STATIC}THIRD_PARTY_LICENSES.txt" not in names:
+        found.append(f"{STATIC}THIRD_PARTY_LICENSES.txt is missing (licences of the bundled code)")
     if "erdify-studio = erdify_studio.cli:main" not in entry_points:
         found.append("console script `erdify-studio` is missing")
     return found

@@ -31,6 +31,7 @@ def _wheel(directory: Path, files: dict[str, str], name: str = "pkg-1.0-py3-none
 COMPLETE = {
     "erdify_studio/_static/index.html": "<html></html>",
     "erdify_studio/_static/assets/index-abc.js": "",
+    "erdify_studio/_static/THIRD_PARTY_LICENSES.txt": "vue\nMIT License\n",
     "pkg-1.0.dist-info/entry_points.txt": ENTRY_POINT,
 }
 
@@ -47,6 +48,10 @@ def test_complete_wheel_passes(tmp_path: Path, capsys: pytest.CaptureFixture[str
         ("erdify_studio/_static/index.html", "index.html is missing"),
         ("erdify_studio/_static/assets/index-abc.js", "no JavaScript bundle"),
         ("pkg-1.0.dist-info/entry_points.txt", "console script `erdify-studio` is missing"),
+        (
+            "erdify_studio/_static/THIRD_PARTY_LICENSES.txt",
+            "THIRD_PARTY_LICENSES.txt is missing",
+        ),
     ],
 )
 def test_incomplete_wheel_fails(

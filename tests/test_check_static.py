@@ -90,3 +90,15 @@ def test_main_exits_1_on_problems(tmp_path: Path, capsys: pytest.CaptureFixture[
 
 def test_main_exits_0_when_clean(tmp_path: Path) -> None:
     assert check_static.main([str(_build(tmp_path, {"index.html": "ok"}))]) == 0
+
+
+def test_the_licence_file_may_name_urls(tmp_path: Path) -> None:
+    build = _build(
+        tmp_path, {"THIRD_PARTY_LICENSES.txt": "vue (MIT) https://github.com/vuejs/core"}
+    )
+    assert check_static.problems(build) == []
+
+
+def test_other_text_files_are_checked(tmp_path: Path) -> None:
+    build = _build(tmp_path, {"notes.txt": "https://evil.example/"})
+    assert len(check_static.problems(build)) == 1
