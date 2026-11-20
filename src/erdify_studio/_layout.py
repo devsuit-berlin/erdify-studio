@@ -34,6 +34,9 @@ OVERVIEW = "_overview"
 #: The group of entities without a value for the grouping.
 DEFAULT_GROUP = "_default"
 
+#: Largest absolute coordinate a position may have, in canvas units.
+MAX_COORDINATE = 10**9
+
 #: An entity's top-left corner on a diagram, in canvas units.
 Position = tuple[int, int]
 
@@ -56,15 +59,19 @@ class Layout:
         """Place ``key`` at ``(x, y)`` on ``diagram``, rounded to integers.
 
         Raises:
-            LayoutError: ``x`` or ``y`` is not a finite number (booleans are refused).
+            LayoutError: ``x`` or ``y`` is not a finite number within
+                ``MAX_COORDINATE`` (booleans are refused).
         """
         try:
             if isinstance(x, bool) or isinstance(y, bool):
                 raise TypeError
-            position = (round(x), round(y))
+            # int(): round() returns what __round__ does, e.g. numpy.int64 for numpy.
+            position = (int(round(x)), int(round(y)))
+            if not _is_position(position):
+                raise ValueError
         except (TypeError, ValueError, OverflowError):
             raise LayoutError(
-                f"position of {key!r} must be finite numbers, got {(x, y)!r}"
+                f"position of {key!r} must be finite numbers, got ({_show(x)}, {_show(y)})"
             ) from None
         self.diagrams.setdefault(diagram, {})[key] = position
 
@@ -114,7 +121,9 @@ def loads_layout(text: str, *, source: str = "<string>") -> Layout:
         data = json.loads(text, object_pairs_hook=_no_duplicates)
     except _DuplicateKey as e:
         raise LayoutError(f"duplicate key {e.key!r} in {source}") from None
-    except json.JSONDecodeError as e:
+    except (ValueError, RecursionError) as e:
+        # JSONDecodeError, plus what json raises past it: an integer over Python's
+        # digit limit (ValueError) or arrays nested too deep (RecursionError).
         raise LayoutError(f"{source} is not valid JSON: {e}") from None
     if not isinstance(data, dict):
         raise LayoutError(f"{source} must be a JSON object")
@@ -224,7 +233,7 @@ def _check_types(layout: Layout) -> None:
             if not _is_position(position):
                 raise LayoutError(
                     f"position of {key!r} in diagram {name!r} must be integers, "
-                    f"got {position!r}; use Layout.set_position"
+                    f"got {_show(position)}; use Layout.set_position"
                 )
 
 
@@ -274,6 +283,14 @@ def _check_version(data: dict[str, object], source: str) -> None:
         )
 
 
+def _show(value: object) -> str:
+    """``repr`` of ``value``, also for an integer over Python's digit limit."""
+    try:
+        return repr(value)
+    except ValueError:
+        return f"<{type(value).__name__} too large to show>"
+
+
 def _is_text(value: object) -> bool:
     """A string that can be written as UTF-8 (no lone surrogates such as ``"\\ud800"``)."""
     if not isinstance(value, str):
@@ -289,7 +306,10 @@ def _is_position(value: object) -> bool:
     return (
         isinstance(value, (list, tuple))
         and len(value) == 2
-        and all(isinstance(v, int) and not isinstance(v, bool) for v in value)
+        and all(
+            isinstance(v, int) and not isinstance(v, bool) and abs(v) <= MAX_COORDINATE
+            for v in value
+        )
     )
 
 

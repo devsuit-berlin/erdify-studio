@@ -1,4 +1,6 @@
 import os
+from decimal import Decimal
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -73,6 +75,17 @@ def test_positions_are_rounded_to_integers(x: float, y: float, expected: tuple[i
     layout = Layout()
     layout.set_position(OVERVIEW, "a", x, y)
     assert layout.diagrams[OVERVIEW]["a"] == expected
+
+
+@pytest.mark.parametrize(
+    ("x", "expected"), [(Fraction(3, 2), 2), (Decimal("1.5"), 2), (Decimal("-7.4"), -7)]
+)
+def test_positions_from_other_number_types_become_ints(x: object, expected: int) -> None:
+    layout = Layout()
+    layout.set_position(OVERVIEW, "a", x, 0)  # type: ignore[arg-type]
+    assert layout.diagrams[OVERVIEW]["a"] == (expected, 0)
+    assert type(layout.diagrams[OVERVIEW]["a"][0]) is int
+    dumps_layout(layout)
 
 
 def test_keys_needing_escapes_survive_a_round_trip() -> None:
@@ -184,7 +197,11 @@ def test_a_file_that_is_not_utf8_is_a_layout_error(tmp_path: Path) -> None:
         load_layout(path)
 
 
-@pytest.mark.parametrize("value", [float("nan"), float("inf"), "12", True])
+@pytest.mark.parametrize(
+    "value",
+    [float("nan"), float("inf"), "12", True, 10**10, 10**5000],
+    ids=["nan", "inf", "str", "bool", "too-large", "over-digit-limit"],
+)
 def test_set_position_rejects_non_numbers(value: object) -> None:
     with pytest.raises(LayoutError, match=r"'a' must be finite numbers"):
         Layout().set_position(OVERVIEW, "a", value, 0)  # type: ignore[arg-type]
@@ -199,6 +216,10 @@ def test_set_position_rejects_non_numbers(value: object) -> None:
         ({OVERVIEW: {1: (0, 0)}}, r"key in diagram '_overview' must be a UTF-8 string, got 1"),
         ({OVERVIEW: {"a": (0, 0), 1: (0, 0)}}, r"must be a UTF-8 string, got 1"),
         ({2: {"a": (0, 0)}}, r"diagram name must be a UTF-8 string, got 2"),
+        (
+            {OVERVIEW: {"a": (10**5000, 0)}},
+            r"'a' in diagram '_overview' must be integers, got <tuple too large to show>",
+        ),
         ({OVERVIEW: {"\ud800": (0, 0)}}, r"must be a UTF-8 string, got '\\ud800'"),
         ({"\ud800": {}}, r"diagram name must be a UTF-8 string"),
     ],
@@ -335,6 +356,9 @@ def test_missing_file_raises_file_not_found(tmp_path: Path) -> None:
         ('{"version": 1, "diagrams": {"d": {"a": [true, 2]}}}', r"'a' in diagram 'd'.*\[x, y\]"),
         ('{"version": 1, "diagrams": {"d": {"a": "1,2"}}}', r"'a' in diagram 'd'.*\[x, y\]"),
         ('{"version": 1, "diagrams": {"d": {}, "d": {}}}', "duplicate key 'd'"),
+        ('{"version": 1, "diagrams": {"d": {"a": [1%s, 2]}}}' % ("0" * 5000), "not valid JSON"),
+        ('{"version": 1, "diagrams": {"d": {"a": %s}}}' % ("[" * 100_000), "not valid JSON"),
+        ('{"version": 1, "diagrams": {"d": {"a": [10000000000, 2]}}}', r"\[x, y\] integers"),
         ('{"version": 1, "diagrams": {"d": {"\\ud800": [1, 2]}}}', "is not valid UTF-8 text"),
         ('{"version": 1, "diagrams": {"\\ud800": {}}}', "is not valid UTF-8 text"),
         ('{"version": 1, "diagrams": {"d": {"a": [1, 2], "a": [3, 4]}}}', "duplicate key 'a'"),
