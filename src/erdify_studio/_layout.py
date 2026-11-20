@@ -53,8 +53,18 @@ class Layout:
         self.diagrams.setdefault(diagram, {})
 
     def set_position(self, diagram: str, key: str, x: float, y: float) -> None:
-        """Place ``key`` at ``(x, y)`` on ``diagram``, rounded to integers."""
-        self.diagrams.setdefault(diagram, {})[key] = (round(x), round(y))
+        """Place ``key`` at ``(x, y)`` on ``diagram``, rounded to integers.
+
+        Raises:
+            LayoutError: ``x`` or ``y`` is not a finite number.
+        """
+        try:
+            position = (round(x), round(y))
+        except (TypeError, ValueError, OverflowError):
+            raise LayoutError(
+                f"position of {key!r} must be finite numbers, got {(x, y)!r}"
+            ) from None
+        self.diagrams.setdefault(diagram, {})[key] = position
 
 
 def dumps_layout(layout: Layout) -> str:
@@ -72,7 +82,13 @@ def dumps_layout(layout: Layout) -> str:
                 continue
             lines.append(f"    {_string(name)}: {{")
             entries = sorted(positions.items())
-            for j, (key, (x, y)) in enumerate(entries):
+            for j, (key, position) in enumerate(entries):
+                if not _is_position(list(position)):
+                    raise LayoutError(
+                        f"position of {key!r} in diagram {name!r} must be integers, "
+                        f"got {position!r}; use Layout.set_position"
+                    )
+                x, y = position
                 entry_comma = "," if j < len(entries) - 1 else ""
                 lines.append(f"      {_string(key)}: [{x}, {y}]{entry_comma}")
             lines.append(f"    }}{comma}")
@@ -131,24 +147,45 @@ def load_layout(path: Path) -> Layout:
         LayoutVersionError: The file is of another ``version``.
         LayoutError: The file is not a valid layout.
     """
-    return loads_layout(path.read_text(encoding="utf-8"), source=str(path))
+    try:
+        text = path.read_text(encoding="utf-8-sig")  # tolerate a BOM added by an editor
+    except UnicodeDecodeError as e:
+        raise LayoutError(f"{str(path)!r} is not UTF-8: {e}") from None
+    return loads_layout(text, source=str(path))
 
 
 def save_layout(layout: Layout, path: Path) -> None:
     """Write ``layout`` to ``path``, creating missing folders.
 
-    The file is replaced atomically. A file of another ``version`` is never
-    overwritten: it may hold positions this erdify-studio cannot read.
+    The file is replaced atomically and keeps its permissions. An existing file is
+    only replaced when it is a valid layout of this version: a file of another
+    ``version`` may hold positions this erdify-studio cannot read, and a broken one
+    (e.g. with git conflict markers) holds positions that must not be lost silently.
 
     Raises:
         LayoutVersionError: ``path`` holds a layout of another version.
+        LayoutError: ``path`` exists but is not a valid layout; fix or remove it first.
     """
-    _refuse_other_version(path)
+    text = dumps_layout(layout)
+    try:
+        mode = path.stat().st_mode & 0o777
+    except FileNotFoundError:
+        mode = _default_mode()
+    else:
+        try:
+            load_layout(path)
+        except LayoutVersionError:
+            raise
+        except LayoutError as e:
+            raise LayoutError(
+                f"not overwriting {str(path)!r}, it is not a valid layout: {e}"
+            ) from e
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-            f.write(dumps_layout(layout))
+            f.write(text)
+        os.chmod(tmp, mode)
         os.replace(tmp, path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
@@ -180,13 +217,10 @@ def _check_version(data: dict[str, object], source: str) -> None:
         )
 
 
-def _refuse_other_version(path: Path) -> None:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        return  # missing or broken: nothing worth keeping
-    if isinstance(data, dict) and "version" in data:
-        _check_version(data, str(path))
+def _default_mode() -> int:
+    umask = os.umask(0)
+    os.umask(umask)
+    return 0o666 & ~umask
 
 
 def _is_position(value: object) -> bool:

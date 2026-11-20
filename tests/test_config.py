@@ -87,6 +87,13 @@ def test_table_must_be_a_table(tmp_path: Path) -> None:
         load_config(pyproject)
 
 
+def test_tool_must_be_a_table(tmp_path: Path) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text("tool = 1\n")
+    with pytest.raises(ConfigError, match=r"\[tool\] must be a table"):
+        load_config(pyproject)
+
+
 def test_unreadable_pyproject_is_an_error(tmp_path: Path) -> None:
     pyproject = tmp_path / "pyproject.toml"
     pyproject.write_text("[tool.erdify-studio\n")

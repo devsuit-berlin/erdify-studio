@@ -100,11 +100,63 @@ def test_save_does_not_overwrite_a_file_of_an_unknown_version(tmp_path: Path) ->
     assert path.read_text() == original
 
 
-def test_save_overwrites_a_broken_file(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "content",
+    [
+        '<<<<<<< HEAD\n{"version": 1}\n=======\n{"version": 1}\n>>>>>>> main\n',
+        "[]",
+        '{"version": 1, "diagrams": {"d": {"a": "1,2"}}}',
+    ],
+)
+def test_save_does_not_overwrite_a_broken_file(tmp_path: Path, content: str) -> None:
     path = tmp_path / "erdify-layout.json"
-    path.write_text("<<<<<<< HEAD\n")
+    path.write_text(content)
+    with pytest.raises(LayoutError, match=r"not overwriting .*erdify-layout\.json"):
+        save_layout(_layout(), path)
+    assert path.read_text() == content
+
+
+def test_save_keeps_the_file_permissions(tmp_path: Path) -> None:
+    path = tmp_path / "erdify-layout.json"
+    save_layout(Layout(), path)
+    path.chmod(0o644)
     save_layout(_layout(), path)
-    assert path.read_text() == EXPECTED
+    assert path.stat().st_mode & 0o777 == 0o644
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits")
+def test_new_file_gets_the_umask_permissions(tmp_path: Path) -> None:
+    umask = os.umask(0o022)
+    try:
+        save_layout(_layout(), tmp_path / "erdify-layout.json")
+    finally:
+        os.umask(umask)
+    assert (tmp_path / "erdify-layout.json").stat().st_mode & 0o777 == 0o644
+
+
+def test_a_byte_order_mark_is_tolerated(tmp_path: Path) -> None:
+    path = tmp_path / "erdify-layout.json"
+    path.write_bytes(b"\xef\xbb\xbf" + EXPECTED.encode())
+    assert load_layout(path) == _layout()
+
+
+def test_a_file_that_is_not_utf8_is_a_layout_error(tmp_path: Path) -> None:
+    path = tmp_path / "erdify-layout.json"
+    path.write_bytes(b'{"version": 1, "diagrams": {"d": {"\xe4": [1, 2]}}}')
+    with pytest.raises(LayoutError, match="not UTF-8"):
+        load_layout(path)
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), "12"])
+def test_set_position_rejects_non_numbers(value: object) -> None:
+    with pytest.raises(LayoutError, match=r"'a' must be finite numbers"):
+        Layout().set_position(OVERVIEW, "a", value, 0)  # type: ignore[arg-type]
+
+
+def test_dump_rejects_positions_set_around_set_position() -> None:
+    layout = Layout(diagrams={OVERVIEW: {"a": (1.5, 2)}})  # type: ignore[dict-item]
+    with pytest.raises(LayoutError, match=r"'a' in diagram '_overview' must be integers"):
+        dumps_layout(layout)
 
 
 def test_save_creates_missing_parent_directories(tmp_path: Path) -> None:

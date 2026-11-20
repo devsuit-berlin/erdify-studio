@@ -2,8 +2,8 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-from erdify_studio._config import DEFAULT_LAYOUT_NAME, GroupBy, StudioConfig, load_config
-from erdify_studio._entities import entity_groups, entity_key, entity_keys, enum_key
+from erdify_studio._config import GroupBy, StudioConfig, load_config
+from erdify_studio._entities import entity_groups, entity_keys, enum_key
 from erdify_studio._errors import (
     ConfigError,
     DuplicateKeyError,
@@ -30,7 +30,6 @@ except PackageNotFoundError:  # pragma: no cover - running from source without i
 
 __all__ = [
     "DEFAULT_GROUP",
-    "DEFAULT_LAYOUT_NAME",
     "LAYOUT_VERSION",
     "OVERVIEW",
     "ConfigError",
@@ -45,7 +44,6 @@ __all__ = [
     "__version__",
     "dumps_layout",
     "entity_groups",
-    "entity_key",
     "entity_keys",
     "enum_key",
     "load_config",

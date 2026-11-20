@@ -56,7 +56,7 @@ def load_config(pyproject: Path | None) -> StudioConfig:
     table = _read_table(pyproject) if pyproject is not None else {}
     source = str(pyproject)
     for key in sorted(set(table) - set(_KEYS)):
-        logger.warning("unknown [tool.%s] key %r in %s, ignored", _TABLE, key, source)
+        logger.warning(f"unknown [tool.{_TABLE}] key {key!r} in {source}, ignored")
 
     group_by = table.get("group_by", "auto")
     choices = get_args(GroupBy)
@@ -75,7 +75,10 @@ def _read_table(pyproject: Path) -> dict[str, object]:
         data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
         raise ConfigError(f"cannot read {str(pyproject)!r}: {e}") from e
-    table = data.get("tool", {}).get(_TABLE, {})
+    tool = data.get("tool", {})
+    if not isinstance(tool, dict):
+        raise ConfigError(f"[tool] must be a table in {pyproject}")
+    table = tool.get(_TABLE, {})
     if not isinstance(table, dict):
         raise ConfigError(f"[tool.{_TABLE}] must be a table in {pyproject}")
     return table
