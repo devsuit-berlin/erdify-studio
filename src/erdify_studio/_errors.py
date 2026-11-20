@@ -23,3 +23,11 @@ class DuplicateKeyError(LayoutError):
 
 class ProjectError(StudioError):
     """A project studio cannot lay out, e.g. one without entities."""
+
+
+class PositionsError(StudioError):
+    """Positions sent to save that do not match the diagram's boxes."""
+
+
+class LayoutConflictError(LayoutError):
+    """The layout file changed since the positions to save were read from it."""

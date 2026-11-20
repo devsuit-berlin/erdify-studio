@@ -24,10 +24,6 @@ def test_version_shows_studio_and_erdify_versions(capsys: pytest.CaptureFixture[
     assert f"erdify {version('erdify')}" in out
 
 
-def test_no_arguments_exits_zero() -> None:
-    assert main([]) == 0
-
-
 def test_unknown_option_exits_with_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exc:
         main(["--no-such-option"])
@@ -36,7 +32,7 @@ def test_unknown_option_exits_with_usage_error(capsys: pytest.CaptureFixture[str
 
 
 def test_runs_as_module(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "argv", ["erdify-studio"])
+    monkeypatch.setattr(sys, "argv", ["erdify-studio", "--help"])
     with pytest.raises(SystemExit) as exc:
         runpy.run_module("erdify_studio", run_name="__main__")
     assert exc.value.code == 0

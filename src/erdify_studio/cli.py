@@ -5,22 +5,27 @@ from __future__ import annotations
 import argparse
 import sys
 import traceback
+import webbrowser
 from collections.abc import Sequence
 from importlib.metadata import version
 from pathlib import Path
 
 import erdify
 
-from erdify_studio import __version__
+from erdify_studio import __version__, _server
 from erdify_studio._check import check_project
 from erdify_studio._config import StudioConfig, load_config
 from erdify_studio._errors import StudioError
+from erdify_studio._overview import build_overview
 from erdify_studio._place import place_project
 
 #: Exit code of a failed check (out-of-date layout).
 EXIT_CHECK_FAILED = 1
 #: Exit code when the project, its config or the layout file cannot be read, or on a bug.
 EXIT_ERROR = 2
+
+#: What ``main`` treats as the start of a command line that names no command.
+_TOP_LEVEL = frozenset({"check", "place", "open", "-h", "--help", "--version"})
 
 _HINT = (
     "hint: run `erdify-studio place --auto` to place new entities and drop stale entries, "
@@ -40,6 +45,25 @@ def build_parser() -> argparse.ArgumentParser:
         version=f"%(prog)s {__version__} (erdify {version('erdify')})",
     )
     commands = parser.add_subparsers(dest="command", metavar="command")
+    open_ = commands.add_parser(
+        "open",
+        help="open the canvas in the browser (the default command)",
+        description=(
+            "Serve the canvas on 127.0.0.1 and open it in the browser: drag the "
+            "entities, then Save writes the layout file. Runs until Ctrl+C. A path "
+            "named like a command is given as ./check."
+        ),
+    )
+    open_.add_argument(
+        "--port", type=_port, default=0, help="port to serve on (default: a free one)"
+    )
+    open_.add_argument(
+        "--no-browser",
+        dest="browser",
+        action="store_false",
+        help="print the URL instead of opening a browser",
+    )
+    _add_path(open_)
     check = commands.add_parser(
         "check",
         help="exit 1 if the committed layout is out of date",
@@ -70,6 +94,17 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _port(value: str) -> int:
+    """A TCP port for ``--port``: 0 (a free one) to 65535."""
+    try:
+        port = int(value)
+    except ValueError:
+        port = -1
+    if not 0 <= port <= 65535:
+        raise argparse.ArgumentTypeError(f"must be 0 to 65535, got {value!r}")
+    return port
+
+
 def _add_path(command: argparse.ArgumentParser) -> None:
     command.add_argument(
         "path",
@@ -82,10 +117,13 @@ def _add_path(command: argparse.ArgumentParser) -> None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return its exit code."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if not argv or argv[0] not in _TOP_LEVEL:
+        argv.insert(0, "open")
     args = build_parser().parse_args(argv)
-    if args.command is None:
-        return 0
     try:
+        if args.command == "open":
+            return _open(args.path, port=args.port, browser=args.browser)
         if args.command == "place":
             return _place(args.path)
         return _check(args.path)
@@ -148,6 +186,31 @@ def _place(path: Path) -> int:
     ]
     action = "created" if result.created else "updated"
     print(f"{shown}: {', '.join([action, *filter(None, changes)])}")
+    return 0
+
+
+def _open(path: Path, *, port: int, browser: bool) -> int:
+    if not (_server.STATIC_DIR / "index.html").is_file():
+        print(
+            "erdify-studio: error: the canvas is not built (from a source checkout: "
+            "run `uv run poe frontend`)",
+            file=sys.stderr,
+        )
+        return EXIT_ERROR
+    project, config = _load(path)
+    shown = _display(config.layout)
+    # Fail before serving, like `check`: no entities, an unreadable layout file.
+    build_overview(project, config, shown_path=shown)
+    server = _server.start_server(lambda: _load(path), port=port, shown_path=shown)
+    try:
+        print(f"erdify-studio: serving {server.url} (Ctrl+C to stop)", flush=True)
+        if browser:
+            webbrowser.open(server.url)
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
     return 0
 
 

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass
+from typing import Final
 
 from erdify import EntityInfo, Project, diagram_edges
 
@@ -45,6 +46,9 @@ _PADDING = 32
 _HEADER = 32
 _ROW = 22
 _MARKERS = 6  # room for the PK / FK / UK badges next to a field
+
+#: The box metrics the canvas draws with (sent to the browser).
+METRICS: Final = {"charWidth": _CHAR_WIDTH, "padding": _PADDING, "header": _HEADER, "row": _ROW}
 
 #: A box on a diagram: ``(x, y, width, height)``.
 _Rect = tuple[int, int, int, int]
@@ -103,9 +107,7 @@ def place_project(project: Project, config: StudioConfig) -> PlaceResult:
     """
     diagrams = project_diagrams(project, config)
     existing = load_existing_layout(config.layout)
-    sizes = _entity_sizes(project)
-    edges = _key_edges(project) if not project.settings.no_relationships else frozenset()
-    edges |= _enum_edges(project)
+    sizes, edges = place_inputs(project)
     result = place_layout(
         existing or Layout(),
         diagrams,
@@ -116,6 +118,19 @@ def place_project(project: Project, config: StudioConfig) -> PlaceResult:
     if result.changed:
         save_layout(result.layout, config.layout)
     return result
+
+
+def place_inputs(project: Project) -> tuple[dict[str, _Size], frozenset[tuple[str, str]]]:
+    """The box size of every entity and enum, and the connected key pairs, of ``project``.
+
+    Edges are erdify's (none with ``no_relationships``) plus an enum to each entity
+    using it.
+
+    Raises:
+        DuplicateKeyError: Two entities have the same layout key.
+    """
+    edges = _key_edges(project) if not project.settings.no_relationships else frozenset()
+    return _entity_sizes(project), edges | _enum_edges(project)
 
 
 def place_layout(
@@ -299,7 +314,14 @@ def _entity_sizes(project: Project) -> dict[str, _Size]:
 
 
 def _entity_box(key: str, entity: EntityInfo) -> _Size:
-    return _box(key, [f"{f.name} {f.type_str}" + " " * _MARKERS for f in entity.fields])
+    # As the canvas draws a field: badges, name, a two-character gap, type, "?" if nullable.
+    return _box(
+        key,
+        [
+            " " * _MARKERS + f"{f.name}  {f.type_str}" + ("?" if f.is_nullable else "")
+            for f in entity.fields
+        ],
+    )
 
 
 def _box(title: str, rows: Collection[str]) -> _Size:
