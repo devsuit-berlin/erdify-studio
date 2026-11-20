@@ -38,6 +38,7 @@ def opened(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[str]]:
         raise KeyboardInterrupt
 
     monkeypatch.setattr(_server.StudioServer, "serve_forever", stop)
+
     def record(url: str) -> bool:
         urls.append(url)
         return True
