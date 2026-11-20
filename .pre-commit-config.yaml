@@ -10,6 +10,11 @@ repos:
         args: [--allow-multiple-documents]
       - id: check-toml
       - id: check-added-large-files
+  - repo: https://github.com/pre-commit/pre-commit
+    rev: v4.7.0
+    hooks:
+      # The hooks this repo ships to consumers (.pre-commit-hooks.yaml).
+      - id: validate_manifest
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.11.21
     hooks:

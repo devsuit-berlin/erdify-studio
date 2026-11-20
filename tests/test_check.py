@@ -19,7 +19,13 @@ from erdify_studio import (
 from erdify_studio.cli import main
 
 MODELS = """\
+import enum
+
 from sqlmodel import Field, SQLModel
+
+
+class Status(str, enum.Enum):
+    OPEN = "open"
 
 
 class Customer(SQLModel, table=True):
@@ -149,6 +155,15 @@ def test_stale_entries_and_diagrams_are_reported() -> None:
     ]
 
 
+def test_unchecked_keys_are_kept_but_not_required() -> None:
+    layout = _complete()
+    layout.set_position("core", "enum:Status", 0, 0)
+    layout.set_position(OVERVIEW, "enum:Gone", 0, 0)
+    assert check_layout(layout, CONTENTS, unchecked={"enum:Status", "enum:Other"}) == [
+        Problem(OVERVIEW, "enum:Gone", "stale_entry"),
+    ]
+
+
 @pytest.mark.parametrize(
     ("problem", "text"),
     [
@@ -205,6 +220,28 @@ def test_cli_reports_one_line_per_problem_then_the_hint(
     ]
 
 
+def test_cli_keeps_positions_of_existing_enums(
+    project: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    layout = _complete()
+    layout.set_position(OVERVIEW, "enum:Status", 0, 0)
+    layout.set_position(OVERVIEW, "enum:Gone", 0, 0)
+    save_layout(layout, project / "erdify-layout.json")
+    assert main(["check"]) == 1
+    assert capsys.readouterr().err.splitlines()[:-1] == [
+        "erdify-layout.json: diagram '_overview': stale entry 'enum:Gone': not in this diagram"
+    ]
+
+
+@pytest.mark.parametrize("content", ["", "\n"])
+def test_cli_empty_layout_file_counts_as_none(
+    project: Path, capsys: pytest.CaptureFixture[str], content: str
+) -> None:
+    (project / "erdify-layout.json").write_text(content)
+    assert main(["check"]) == 1
+    assert capsys.readouterr().err.splitlines() == ["erdify-layout.json: no layout file yet", HINT]
+
+
 def test_cli_without_layout_file_fails_with_the_hint(
     project: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -213,11 +250,13 @@ def test_cli_without_layout_file_fails_with_the_hint(
 
 
 def test_cli_reads_the_configured_layout_path(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # Run from outside the project: the path is shown as configured, absolute.
+    # Run from a sibling folder: the path outside the working directory is absolute.
     root = tmp_path / "repo"
     root.mkdir()
+    (tmp_path / "elsewhere").mkdir()
+    monkeypatch.chdir(tmp_path / "elsewhere")
     _project(root, studio='layout = "docs/layout.json"\ngroup_by = "none"\n')
     layout = Layout()
     for key in ALL:
@@ -239,6 +278,7 @@ def test_cli_reads_the_configured_layout_path(
     ("setup", "message"),
     [
         (lambda p: (p / "erdify-layout.json").write_text("<<<<<<< HEAD\n"), "not valid JSON"),
+        (lambda p: (p / "erdify-layout.json").write_bytes(b"\xff\xfe{"), "is not UTF-8"),
         (
             lambda p: (p / "pyproject.toml").write_text(
                 '[tool.erdify]\ninclude = ["**/models.py"]\n'
@@ -251,7 +291,7 @@ def test_cli_reads_the_configured_layout_path(
             "include",
         ),
     ],
-    ids=["broken-layout", "bad-studio-config", "bad-erdify-config"],
+    ids=["broken-layout", "latin1-layout", "bad-studio-config", "bad-erdify-config"],
 )
 def test_cli_errors_exit_two(
     project: Path,

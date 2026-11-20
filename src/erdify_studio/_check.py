@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -89,17 +89,29 @@ def diagram_contents(
     return contents
 
 
-def check_layout(layout: Layout, diagrams: Mapping[str, DiagramContent]) -> list[Problem]:
+def check_layout(
+    layout: Layout,
+    diagrams: Mapping[str, DiagramContent],
+    *,
+    unchecked: Collection[str] = frozenset(),
+) -> list[Problem]:
     """Return how ``layout`` differs from ``diagrams``, sorted; empty when it matches.
 
     A missing diagram is no problem of its own: its entities are reported unplaced.
+
+    Args:
+        layout: The layout to check.
+        diagrams: What each diagram shows (``diagram_contents``).
+        unchecked: Keys whose positions are kept in any diagram but not required,
+            e.g. the ``enum_key`` of every existing enum until erdify tells which
+            enums it draws.
     """
     problems: list[Problem] = []
     for name, content in diagrams.items():
         placed = layout.diagrams.get(name, {})
         problems += [Problem(name, key, "unplaced") for key in content.entities - placed.keys()]
         problems += [Problem(name, key, "foreign") for key in content.foreign - placed.keys()]
-        shown = content.entities | content.foreign
+        shown = content.entities | content.foreign | set(unchecked)
         problems += [Problem(name, key, "stale_entry") for key in placed.keys() - shown]
     problems += [
         Problem(name, None, "stale_diagram") for name in layout.diagrams.keys() - diagrams.keys()

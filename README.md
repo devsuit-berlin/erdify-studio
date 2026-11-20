@@ -82,7 +82,7 @@ renaming a class keeps its position.
 - SQL DDL with same-name tables in different schemas (`core.customer`, `mart.customer`)
   is read as one table by erdify for now
   ([erdify#353](https://github.com/devsuit-berlin/erdify/issues/353)).
-- `check` does not require positions for enums yet: erdify has no public API for which
+- `check` keeps but does not require positions for enums yet: erdify has no public API for which
   enums it draws and which entities use them
   ([erdify#369](https://github.com/devsuit-berlin/erdify/issues/369)).
 

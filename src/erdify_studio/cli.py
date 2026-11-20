@@ -13,8 +13,9 @@ import erdify
 from erdify_studio import __version__
 from erdify_studio._check import check_layout, diagram_contents
 from erdify_studio._config import load_config
+from erdify_studio._entities import enum_key
 from erdify_studio._errors import StudioError
-from erdify_studio._layout import load_layout
+from erdify_studio._layout import Layout, load_layout
 
 #: Exit code of a failed check (out-of-date layout).
 EXIT_CHECK_FAILED = 1
@@ -81,19 +82,32 @@ def _check(path: Path) -> int:
     config = load_config(project.settings.pyproject)
     diagrams = diagram_contents(project.entities, config.group_by)
     shown = _display(config.layout)
-    try:
-        layout = load_layout(config.layout)
-    except FileNotFoundError:
+    layout = _load(config.layout)
+    if layout is None:
         print(f"{shown}: no layout file yet", file=sys.stderr)
         print(_HINT, file=sys.stderr)
         return EXIT_CHECK_FAILED
-    problems = check_layout(layout, diagrams)
+    # Enums are not required until erdify tells which ones it draws (erdify#369).
+    enums = {enum_key(enum) for enum in project.enums.values()}
+    problems = check_layout(layout, diagrams, unchecked=enums)
     if not problems:
         return 0
     for problem in problems:
         print(f"{shown}: {problem}", file=sys.stderr)
     print(_HINT, file=sys.stderr)
     return EXIT_CHECK_FAILED
+
+
+def _load(path: Path) -> Layout | None:
+    """The layout at ``path``; None when there is none yet (no file, or an empty one)."""
+    try:
+        if not path.read_text(encoding="utf-8-sig").strip():
+            return None
+    except FileNotFoundError:
+        return None
+    except (OSError, UnicodeDecodeError):
+        pass  # load_layout reports it
+    return load_layout(path)
 
 
 def _display(path: Path) -> str:
