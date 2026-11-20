@@ -3,6 +3,7 @@ from erdify import EntityInfo, EnumInfo
 
 from erdify_studio import (
     DEFAULT_GROUP,
+    OVERVIEW,
     DuplicateKeyError,
     LayoutError,
     entity_groups,
@@ -117,7 +118,14 @@ def test_auto_prefers_app_over_module() -> None:
     assert entity_groups({"T": entity}, "auto") == {"T": "a"}
 
 
-def test_a_group_named_like_a_reserved_diagram_is_an_error() -> None:
-    entity = _entity("T", "t", schema="_overview")
-    with pytest.raises(LayoutError, match=r"'_overview'.*reserved.*'T'"):
-        entity_groups({"T": entity}, "schema")
+@pytest.mark.parametrize("reserved", [OVERVIEW, DEFAULT_GROUP])
+@pytest.mark.parametrize(
+    ("group_by", "source"),
+    [("schema", "schema"), ("app", "app"), ("module", "module"), ("auto", "schema")],
+)
+def test_a_group_named_like_a_reserved_diagram_is_an_error(
+    reserved: str, group_by: str, source: str
+) -> None:
+    entity = _entity("T", "t", **{source: reserved})
+    with pytest.raises(LayoutError, match=rf"'{reserved}'.*reserved.*'T'"):
+        entity_groups({"T": entity}, group_by)  # type: ignore[arg-type]

@@ -68,7 +68,13 @@ class Layout:
 
 
 def dumps_layout(layout: Layout) -> str:
-    """Return the file content for ``layout``: sorted, one entry per line."""
+    """Return the file content for ``layout``: sorted, one entry per line.
+
+    Raises:
+        LayoutError: A diagram name or key is not a string, or a position is not two
+            integers (set positions with ``Layout.set_position``).
+    """
+    _check_types(layout)
     lines = ["{", f'  "version": {LAYOUT_VERSION},']
     if not layout.diagrams:
         lines.append('  "diagrams": {}')
@@ -82,13 +88,7 @@ def dumps_layout(layout: Layout) -> str:
                 continue
             lines.append(f"    {_string(name)}: {{")
             entries = sorted(positions.items())
-            for j, (key, position) in enumerate(entries):
-                if not _is_position(list(position)):
-                    raise LayoutError(
-                        f"position of {key!r} in diagram {name!r} must be integers, "
-                        f"got {position!r}; use Layout.set_position"
-                    )
-                x, y = position
+            for j, (key, (x, y)) in enumerate(entries):
                 entry_comma = "," if j < len(entries) - 1 else ""
                 lines.append(f"      {_string(key)}: [{x}, {y}]{entry_comma}")
             lines.append(f"    }}{comma}")
@@ -206,12 +206,28 @@ def _read(path: Path) -> str:
         raise LayoutError(f"cannot read {str(path)!r}: {e}") from None
 
 
+def _check_types(layout: Layout) -> None:
+    for name, positions in layout.diagrams.items():
+        if not isinstance(name, str):
+            raise LayoutError(f"diagram name must be a string, got {name!r}")
+        for key, position in positions.items():
+            if not isinstance(key, str):
+                raise LayoutError(f"key in diagram {name!r} must be a string, got {key!r}")
+            if not _is_position(position):
+                raise LayoutError(
+                    f"position of {key!r} in diagram {name!r} must be integers, "
+                    f"got {position!r}; use Layout.set_position"
+                )
+
+
 def _refuse_to_lose_positions(path: Path, *, source: str) -> None:
     """Raise unless replacing the existing ``path`` loses nothing."""
     try:
         text = _read(path)
         if text.strip():  # an empty file (e.g. from `touch`) holds no positions
             loads_layout(text, source=source)
+    except FileNotFoundError:
+        return  # removed since it was found (e.g. by a git checkout): nothing to lose
     except LayoutVersionError:
         raise
     except LayoutError as e:
@@ -252,7 +268,7 @@ def _check_version(data: dict[str, object], source: str) -> None:
 
 def _is_position(value: object) -> bool:
     return (
-        isinstance(value, list)
+        isinstance(value, (list, tuple))
         and len(value) == 2
         and all(isinstance(v, int) and not isinstance(v, bool) for v in value)
     )

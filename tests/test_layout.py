@@ -181,9 +181,20 @@ def test_set_position_rejects_non_numbers(value: object) -> None:
         Layout().set_position(OVERVIEW, "a", value, 0)  # type: ignore[arg-type]
 
 
-def test_dump_rejects_positions_set_around_set_position() -> None:
-    layout = Layout(diagrams={OVERVIEW: {"a": (1.5, 2)}})  # type: ignore[dict-item]
-    with pytest.raises(LayoutError, match=r"'a' in diagram '_overview' must be integers"):
+@pytest.mark.parametrize(
+    ("diagrams", "message"),
+    [
+        ({OVERVIEW: {"a": (1.5, 2)}}, r"'a' in diagram '_overview' must be integers"),
+        ({OVERVIEW: {"a": 5}}, r"'a' in diagram '_overview' must be integers"),
+        ({OVERVIEW: {"a": (1, 2, 3)}}, r"'a' in diagram '_overview' must be integers"),
+        ({OVERVIEW: {1: (0, 0)}}, r"key in diagram '_overview' must be a string, got 1"),
+        ({OVERVIEW: {"a": (0, 0), 1: (0, 0)}}, r"must be a string, got 1"),
+        ({2: {"a": (0, 0)}}, r"diagram name must be a string, got 2"),
+    ],
+)
+def test_dump_rejects_values_set_around_set_position(diagrams: object, message: str) -> None:
+    layout = Layout(diagrams=diagrams)  # type: ignore[arg-type]
+    with pytest.raises(LayoutError, match=message):
         dumps_layout(layout)
 
 
@@ -270,6 +281,24 @@ def test_an_unreadable_existing_file_is_a_layout_error(
     monkeypatch.setattr(Path, "stat", fail)
     with pytest.raises(LayoutError, match="cannot write .*permission denied"):
         save_layout(_layout(), path)
+
+
+def test_save_when_the_file_vanishes_before_it_is_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "erdify-layout.json"
+    save_layout(Layout(), path)
+    real_read_text = Path.read_text
+
+    def vanish(self: Path, *args: object, **kwargs: object) -> str:
+        if self == path.resolve():
+            self.unlink()
+        return real_read_text(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "read_text", vanish)
+    save_layout(_layout(), path)
+    monkeypatch.undo()
+    assert path.read_text() == EXPECTED
 
 
 def test_missing_file_raises_file_not_found(tmp_path: Path) -> None:
