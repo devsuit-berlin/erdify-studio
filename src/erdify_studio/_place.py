@@ -6,8 +6,8 @@ to its first placed neighbour (right, below, left, above). A box without a place
 neighbour goes to the first free slot of a grid right of the boxes that were
 placed before. No two boxes come closer than ``GAP``.
 
-Box sizes are estimates from the text the box shows (the canvas renders the same
-fields), so neighbours stay readable without a browser.
+Box sizes are estimates from the text a box shows (title and one row per field),
+so placing works without a browser; keep them in sync with the canvas (#5).
 """
 
 from __future__ import annotations
@@ -262,6 +262,9 @@ def _grid_slot(
         row, column = divmod(slot, GRID_COLUMNS)
         spot = (origin[0] + column * GRID_COLUMN, origin[1] + row * GRID_ROW)
         if not _in_range((*spot, w, h)):
+            if column and spot[1] >= origin[1] and _in_range((origin[0], spot[1], w, h)):
+                slot += GRID_COLUMNS - column  # past the limit in x only: next row
+                continue
             raise LayoutError(
                 f"no room for a new box at {spot!r}: positions are limited to "
                 f"\u00b1{MAX_COORDINATE}; move the boxes near the limit"

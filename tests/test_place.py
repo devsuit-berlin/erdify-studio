@@ -203,6 +203,16 @@ def test_no_room_within_the_coordinate_limit_is_an_error(tmp_path: Path) -> None
         _place(root, layout)
 
 
+def test_the_grid_wraps_before_the_coordinate_limit(tmp_path: Path) -> None:
+    # Only two columns fit right of the fixed box: the third box starts a new row.
+    root = _project(tmp_path, models=_tables(["a", "b", "c", "d"]))
+    layout = Layout()
+    x = MAX_COORDINATE - 700
+    layout.set_position(OVERVIEW, "a", x - MIN_WIDTH - GAP, 0)
+    positions = _place(root, layout).layout.diagrams[OVERVIEW]
+    assert [positions[k] for k in "bcd"] == [(x, 0), (x + 280, 0), (x, 120)]
+
+
 def test_a_neighbour_near_the_limit_gets_a_spot_inside_it(tmp_path: Path) -> None:
     root = _project(tmp_path, studio='group_by = "none"\n')
     layout = Layout()
