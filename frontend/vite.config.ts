@@ -53,6 +53,11 @@ export default defineConfig({
       "/api": {
         target: process.env.STUDIO_API ?? "http://127.0.0.1:8765",
         changeOrigin: true,
+        // The server only accepts its own Origin; the dev page's is localhost:5173.
+        // The token still guards the API.
+        configure: (proxy) => {
+          proxy.on("proxyReq", (request) => request.removeHeader("origin"));
+        },
       },
     },
   },
