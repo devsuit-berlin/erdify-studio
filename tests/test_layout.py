@@ -136,6 +136,15 @@ def test_save_does_not_overwrite_a_file_that_is_not_utf8(tmp_path: Path) -> None
     assert path.read_bytes() == b"\xe4\xf6"
 
 
+def test_save_does_not_overwrite_a_file_with_a_lone_surrogate_key(tmp_path: Path) -> None:
+    path = tmp_path / "erdify-layout.json"
+    content = '{"version": 1, "diagrams": {"d": {"\\ud800": [1, 2]}}}\n'
+    path.write_text(content)
+    with pytest.raises(LayoutError, match="not overwriting .*not valid UTF-8 text"):
+        save_layout(_layout(), path)
+    assert path.read_text() == content
+
+
 def test_save_overwrites_an_empty_file(tmp_path: Path) -> None:
     path = tmp_path / "erdify-layout.json"
     path.write_text("\n")
@@ -175,7 +184,7 @@ def test_a_file_that_is_not_utf8_is_a_layout_error(tmp_path: Path) -> None:
         load_layout(path)
 
 
-@pytest.mark.parametrize("value", [float("nan"), float("inf"), "12"])
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), "12", True])
 def test_set_position_rejects_non_numbers(value: object) -> None:
     with pytest.raises(LayoutError, match=r"'a' must be finite numbers"):
         Layout().set_position(OVERVIEW, "a", value, 0)  # type: ignore[arg-type]
@@ -187,9 +196,11 @@ def test_set_position_rejects_non_numbers(value: object) -> None:
         ({OVERVIEW: {"a": (1.5, 2)}}, r"'a' in diagram '_overview' must be integers"),
         ({OVERVIEW: {"a": 5}}, r"'a' in diagram '_overview' must be integers"),
         ({OVERVIEW: {"a": (1, 2, 3)}}, r"'a' in diagram '_overview' must be integers"),
-        ({OVERVIEW: {1: (0, 0)}}, r"key in diagram '_overview' must be a string, got 1"),
-        ({OVERVIEW: {"a": (0, 0), 1: (0, 0)}}, r"must be a string, got 1"),
-        ({2: {"a": (0, 0)}}, r"diagram name must be a string, got 2"),
+        ({OVERVIEW: {1: (0, 0)}}, r"key in diagram '_overview' must be a UTF-8 string, got 1"),
+        ({OVERVIEW: {"a": (0, 0), 1: (0, 0)}}, r"must be a UTF-8 string, got 1"),
+        ({2: {"a": (0, 0)}}, r"diagram name must be a UTF-8 string, got 2"),
+        ({OVERVIEW: {"\ud800": (0, 0)}}, r"must be a UTF-8 string, got '\\ud800'"),
+        ({"\ud800": {}}, r"diagram name must be a UTF-8 string"),
     ],
 )
 def test_dump_rejects_values_set_around_set_position(diagrams: object, message: str) -> None:
@@ -324,6 +335,8 @@ def test_missing_file_raises_file_not_found(tmp_path: Path) -> None:
         ('{"version": 1, "diagrams": {"d": {"a": [true, 2]}}}', r"'a' in diagram 'd'.*\[x, y\]"),
         ('{"version": 1, "diagrams": {"d": {"a": "1,2"}}}', r"'a' in diagram 'd'.*\[x, y\]"),
         ('{"version": 1, "diagrams": {"d": {}, "d": {}}}', "duplicate key 'd'"),
+        ('{"version": 1, "diagrams": {"d": {"\\ud800": [1, 2]}}}', "is not valid UTF-8 text"),
+        ('{"version": 1, "diagrams": {"\\ud800": {}}}', "is not valid UTF-8 text"),
         ('{"version": 1, "diagrams": {"d": {"a": [1, 2], "a": [3, 4]}}}', "duplicate key 'a'"),
     ],
 )

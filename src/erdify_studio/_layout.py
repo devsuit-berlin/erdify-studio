@@ -56,9 +56,11 @@ class Layout:
         """Place ``key`` at ``(x, y)`` on ``diagram``, rounded to integers.
 
         Raises:
-            LayoutError: ``x`` or ``y`` is not a finite number.
+            LayoutError: ``x`` or ``y`` is not a finite number (booleans are refused).
         """
         try:
+            if isinstance(x, bool) or isinstance(y, bool):
+                raise TypeError
             position = (round(x), round(y))
         except (TypeError, ValueError, OverflowError):
             raise LayoutError(
@@ -126,10 +128,16 @@ def loads_layout(text: str, *, source: str = "<string>") -> Layout:
 
     layout = Layout()
     for name, positions in diagrams.items():
+        if not _is_text(name):
+            raise LayoutError(f"diagram name {name!r} is not valid UTF-8 text in {source}")
         if not isinstance(positions, dict):
             raise LayoutError(f"diagram {name!r} must be an object in {source}")
         layout.add_diagram(name)
         for key, value in positions.items():
+            if not _is_text(key):
+                raise LayoutError(
+                    f"key {key!r} in diagram {name!r} is not valid UTF-8 text in {source}"
+                )
             if not _is_position(value):
                 raise LayoutError(
                     f"position of {key!r} in diagram {name!r} must be [x, y] integers, "
@@ -208,11 +216,11 @@ def _read(path: Path) -> str:
 
 def _check_types(layout: Layout) -> None:
     for name, positions in layout.diagrams.items():
-        if not isinstance(name, str):
-            raise LayoutError(f"diagram name must be a string, got {name!r}")
+        if not _is_text(name):
+            raise LayoutError(f"diagram name must be a UTF-8 string, got {name!r}")
         for key, position in positions.items():
-            if not isinstance(key, str):
-                raise LayoutError(f"key in diagram {name!r} must be a string, got {key!r}")
+            if not _is_text(key):
+                raise LayoutError(f"key in diagram {name!r} must be a UTF-8 string, got {key!r}")
             if not _is_position(position):
                 raise LayoutError(
                     f"position of {key!r} in diagram {name!r} must be integers, "
@@ -264,6 +272,17 @@ def _check_version(data: dict[str, object], source: str) -> None:
             f"unknown layout file version {version} in {source}: "
             f"this erdify-studio supports {LAYOUT_VERSION}"
         )
+
+
+def _is_text(value: object) -> bool:
+    """A string that can be written as UTF-8 (no lone surrogates such as ``"\\ud800"``)."""
+    if not isinstance(value, str):
+        return False
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
 
 
 def _is_position(value: object) -> bool:
