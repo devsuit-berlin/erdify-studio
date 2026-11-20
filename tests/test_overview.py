@@ -297,7 +297,7 @@ def test_save_writes_the_overview_positions(tmp_path: Path) -> None:
     root = _project(tmp_path)
     _save(root, _positions())
     overview = load_layout(root / "erdify-layout.json").diagrams[OVERVIEW]
-    assert overview == {key: (x, y) for key, (x, y) in _positions().items()}  # type: ignore[misc]
+    assert overview == {key: (i * 400, 0) for i, key in enumerate((*ENTITIES, ENUM))}
 
 
 def test_after_save_check_passes(tmp_path: Path) -> None:
