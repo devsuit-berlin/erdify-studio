@@ -9,7 +9,7 @@ from typing import Literal
 from erdify import EntityInfo, Project, diagram_edges, enum_users
 
 from erdify_studio._config import GroupBy, StudioConfig
-from erdify_studio._entities import entity_groups, entity_keys, enum_key
+from erdify_studio._entities import entity_groups, entity_ids, entity_keys, enum_key
 from erdify_studio._errors import ProjectError
 from erdify_studio._layout import OVERVIEW, Layout, load_existing_layout
 
@@ -83,9 +83,9 @@ def diagram_contents(
     in either direction. Without ``relationships`` (erdify's ``no_relationships``)
     erdify draws no edges, so there are no foreign boxes.
 
-    ``enums`` maps the layout key of every enum erdify draws to the names of the
-    entities using it (``erdify.enum_users``): the overview shows every one, a group
-    diagram those its own entities use.
+    ``enums`` maps the layout key of every enum erdify draws to the names
+    (``EntityInfo.name``) of the entities using it (``erdify.enum_users``): the
+    overview shows every one, a group diagram those its own entities use.
 
     Raises:
         DuplicateKeyError: Two entities have the same layout key.
@@ -93,22 +93,23 @@ def diagram_contents(
     """
     keys = entity_keys(entities)
     groups = entity_groups(entities, group_by)
+    ids = entity_ids(entities)
     own: dict[str, set[str]] = {}
     for name, group in groups.items():
         own.setdefault(group, set()).add(keys[name])
     foreign: dict[str, set[str]] = {group: set() for group in own}
     if groups and relationships:
         for edge in diagram_edges(entities):
-            source, target = edge.from_entity, edge.to_entity
+            source, target = ids[edge.from_entity], ids[edge.to_entity]
             if groups[source] != groups[target]:
                 foreign[groups[source]].add(keys[target])
                 foreign[groups[target]].add(keys[source])
 
     used: dict[str, set[str]] = {group: set() for group in own}
-    for key, users in (enums or {}).items():
-        for name in users:
-            if groups:
-                used[groups[name]].add(key)
+    if groups:
+        for key, users in (enums or {}).items():
+            for name in users:
+                used[groups[ids[name]]].add(key)
 
     contents = {OVERVIEW: DiagramContent(frozenset(keys.values()), enums=frozenset(enums or {}))}
     for group in own:

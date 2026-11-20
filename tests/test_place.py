@@ -1,5 +1,6 @@
 """The ``place --auto`` command: placing new boxes, dropping stale entries, the CLI."""
 
+from dataclasses import replace
 from itertools import combinations
 from pathlib import Path
 
@@ -293,6 +294,14 @@ def test_with_no_enums_no_enum_is_placed(tmp_path: Path) -> None:
     root = _project(tmp_path, WITH_ENUM, erdify="no_enums = true\n")
     diagrams = _place(root).layout.diagrams
     assert not any("enum:Status" in positions for positions in diagrams.values())
+
+
+def test_entity_names_that_differ_from_their_keys(tmp_path: Path) -> None:
+    root = _project(tmp_path, WITH_ENUM)
+    project = erdify.load_project(root, strict=True)
+    rekeyed = replace(project, entities={f"x.{k}": e for k, e in project.entities.items()})
+    config = load_config(project.settings.pyproject)
+    assert place_project(rekeyed, config).layout == place_project(project, config).layout
 
 
 def test_same_name_sql_tables_in_two_schemas_get_two_positions(tmp_path: Path) -> None:

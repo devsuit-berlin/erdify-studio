@@ -20,7 +20,7 @@ from erdify import EntityInfo, Project, diagram_edges
 
 from erdify_studio._check import DiagramContent, drawn_enums, project_diagrams
 from erdify_studio._config import StudioConfig
-from erdify_studio._entities import entity_keys, enum_key
+from erdify_studio._entities import entity_ids, entity_keys, enum_key
 from erdify_studio._errors import LayoutError
 from erdify_studio._layout import (
     MAX_COORDINATE,
@@ -154,7 +154,7 @@ def place_layout(
         positions = {key: pos for key, pos in old.items() if key in shown}
         removed += [(name, key) for key in sorted(old.keys() - positions.keys())]
 
-        def size(key: str, content: DiagramContent = content) -> _Size:
+        def size(key: str, own: frozenset[str] = own) -> _Size:
             if key in own:
                 return sizes[key]
             return _box(key, ())  # a foreign box shows the name only
@@ -309,13 +309,16 @@ def _box(title: str, rows: Collection[str]) -> _Size:
 
 def _enum_edges(project: Project) -> frozenset[tuple[str, str]]:
     keys = entity_keys(project.entities)
+    ids = entity_ids(project.entities)
     return frozenset(
-        (enum, keys[name]) for enum, users in drawn_enums(project).items() for name in users
+        (enum, keys[ids[name]]) for enum, users in drawn_enums(project).items() for name in users
     )
 
 
 def _key_edges(project: Project) -> frozenset[tuple[str, str]]:
     keys = entity_keys(project.entities)
+    ids = entity_ids(project.entities)
     return frozenset(
-        (keys[edge.from_entity], keys[edge.to_entity]) for edge in diagram_edges(project.entities)
+        (keys[ids[edge.from_entity]], keys[ids[edge.to_entity]])
+        for edge in diagram_edges(project.entities)
     )

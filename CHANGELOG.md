@@ -12,7 +12,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Requires erdify 1.8.0: the enums erdify draws (`erdify.enum_users`), same-name
   tables in different schemas and schema-qualified foreign keys are laid out exactly
   as erdify draws them.
-
 - Package scaffold: `pip install erdify-studio` installs the `erdify-studio` command
   (`--help`, `--version`) with erdify as a dependency; `erdify-studio[sql]` pulls in
   `erdify[sql]`. The browser frontend is built in CI and shipped inside the wheel, so no
