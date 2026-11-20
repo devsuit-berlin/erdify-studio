@@ -11,9 +11,13 @@ from erdify_studio import (
     DiagramContent,
     DuplicateKeyError,
     Layout,
+    LayoutVersionError,
     Problem,
+    ProjectError,
     check_layout,
+    check_project,
     diagram_contents,
+    load_config,
     save_layout,
 )
 from erdify_studio.cli import main
@@ -101,11 +105,72 @@ def test_edges_within_a_group_give_no_foreign_box(tmp_path: Path) -> None:
     }
 
 
+def test_without_relationships_there_are_no_foreign_boxes(tmp_path: Path) -> None:
+    project = erdify.load_project(_project(tmp_path))
+    contents = diagram_contents(project.entities, "auto", relationships=False)
+    assert {name: content.foreign for name, content in contents.items()} == {
+        name: frozenset() for name in CONTENTS
+    }
+
+
 def test_duplicate_layout_keys_are_refused(tmp_path: Path) -> None:
     models = MODELS.replace('__tablename__ = "lines"', '__tablename__ = "invoices"')
     project = erdify.load_project(_project(tmp_path, models))
     with pytest.raises(DuplicateKeyError, match="'Invoice' and 'Line'"):
         diagram_contents(project.entities, "auto")
+
+
+# --- check_project ----------------------------------------------------------------
+
+
+def _check(root: Path) -> list[Problem] | None:
+    project = erdify.load_project(root)
+    return check_project(project, load_config(project.settings.pyproject))
+
+
+def test_check_project_without_layout_returns_none(tmp_path: Path) -> None:
+    assert _check(_project(tmp_path)) is None
+
+
+def test_check_project_keeps_enums_and_reports_problems(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    layout = _complete()
+    layout.set_position(OVERVIEW, "enum:Status", 0, 0)
+    del layout.diagrams["core"]["billing.invoices"]
+    save_layout(layout, root / "erdify-layout.json")
+    assert _check(root) == [Problem("core", "billing.invoices", "foreign")]
+
+
+def test_check_project_follows_no_relationships(tmp_path: Path) -> None:
+    root = _project(tmp_path, studio="")
+    text = (root / "pyproject.toml").read_text()
+    (root / "pyproject.toml").write_text(
+        text.replace("[tool.erdify]\n", "[tool.erdify]\nno_relationships = true\n")
+    )
+    save_layout(_complete(), root / "erdify-layout.json")
+    assert _check(root) == [
+        Problem("billing", "core.customers", "stale_entry"),
+        Problem("core", "billing.invoices", "stale_entry"),
+    ]
+
+
+def test_check_project_refuses_a_project_without_entities(tmp_path: Path) -> None:
+    root = _project(tmp_path, models="")
+    with pytest.raises(ProjectError, match="no entities found in "):
+        _check(root)
+
+
+def test_check_project_refuses_duplicate_keys(tmp_path: Path) -> None:
+    models = MODELS.replace('__tablename__ = "lines"', '__tablename__ = "invoices"')
+    with pytest.raises(DuplicateKeyError):
+        _check(_project(tmp_path, models))
+
+
+def test_check_project_refuses_another_layout_version(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    (root / "erdify-layout.json").write_text('{"version": 2, "diagrams": {}}')
+    with pytest.raises(LayoutVersionError):
+        _check(root)
 
 
 # --- check_layout -----------------------------------------------------------------

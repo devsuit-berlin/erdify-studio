@@ -60,13 +60,14 @@ class Problem:
 
 
 def diagram_contents(
-    entities: Mapping[str, EntityInfo], group_by: GroupBy
+    entities: Mapping[str, EntityInfo], group_by: GroupBy, *, relationships: bool = True
 ) -> dict[str, DiagramContent]:
     """Map every diagram (the overview and one per group) to the keys it shows.
 
     A group diagram shows its own entities plus a foreign box for every entity of
     another group connected to one of them by an edge of ``erdify.diagram_edges``,
-    in either direction.
+    in either direction. Without ``relationships`` (erdify's ``no_relationships``)
+    erdify draws no edges, so there are no foreign boxes.
 
     Raises:
         DuplicateKeyError: Two entities have the same layout key.
@@ -78,7 +79,7 @@ def diagram_contents(
     for name, group in groups.items():
         own.setdefault(group, set()).add(keys[name])
     foreign: dict[str, set[str]] = {group: set() for group in own}
-    if groups:
+    if groups and relationships:
         for edge in diagram_edges(entities):
             source, target = edge.from_entity, edge.to_entity
             if groups[source] != groups[target]:
@@ -147,7 +148,11 @@ def check_project(project: Project, config: StudioConfig) -> list[Problem] | Non
             f"no entities found in {str(project.settings.input)!r}; check the path and "
             f"[tool.erdify] include / sources, or set allow_empty"
         )
-    diagrams = diagram_contents(project.entities, config.group_by)
+    diagrams = diagram_contents(
+        project.entities,
+        config.group_by,
+        relationships=not project.settings.no_relationships,
+    )
     layout = _load_existing(config.layout)
     if layout is None:
         return None
