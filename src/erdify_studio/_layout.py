@@ -157,7 +157,8 @@ def load_layout(path: Path) -> Layout:
 def save_layout(layout: Layout, path: Path) -> None:
     """Write ``layout`` to ``path``, creating missing folders.
 
-    The file is replaced atomically and keeps its permissions. An existing file is
+    The file is replaced atomically and keeps its permissions (POSIX mode bits; on
+    Windows only the read-only flag exists). An existing file is
     only replaced when it is a valid layout of this version: a file of another
     ``version`` may hold positions this erdify-studio cannot read, and a broken one
     (e.g. with git conflict markers) holds positions that must not be lost silently.

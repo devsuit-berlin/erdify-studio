@@ -116,6 +116,7 @@ def test_save_does_not_overwrite_a_broken_file(tmp_path: Path, content: str) -> 
     assert path.read_text() == content
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits")
 def test_save_keeps_the_file_permissions(tmp_path: Path) -> None:
     path = tmp_path / "erdify-layout.json"
     save_layout(Layout(), path)
