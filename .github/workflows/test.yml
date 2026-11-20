@@ -1,0 +1,28 @@
+name: Testing
+# A newer push to the same PR cancels the older run; every push to main gets its
+# own group so each merge commit is verified as a whole.
+concurrency:
+  group: "testing-${{ github.event_name == 'push' && github.sha || github.ref }}"
+  cancel-in-progress: true
+on:
+  push: { branches: [main] }
+  pull_request: { branches: [main] }
+permissions:
+  contents: read
+jobs:
+  test:
+    name: Test Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with: { enable-cache: true }
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync --frozen
+      - run: uv run pytest

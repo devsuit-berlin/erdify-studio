@@ -1,0 +1,20 @@
+name: Linting
+# A newer push to the same PR cancels the older run; every push to main gets its
+# own group so each merge commit is verified as a whole.
+concurrency:
+  group: "linting-${{ github.event_name == 'push' && github.sha || github.ref }}"
+  cancel-in-progress: true
+on:
+  push: { branches: [main] }
+  pull_request: { branches: [main] }
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: { python-version-file: .python-version }
+      - run: pip install pre-commit
+      - run: pre-commit run --all-files

@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+dist/
+*.egg-info/
+
+# Personal / local agent setup
+.claude/
+.mcp.json
+CLAUDE.local.md
