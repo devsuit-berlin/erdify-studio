@@ -20,7 +20,14 @@ from erdify import EntityInfo, Project, diagram_edges
 from erdify_studio._check import DiagramContent, enum_keys, project_diagrams
 from erdify_studio._config import StudioConfig
 from erdify_studio._entities import entity_keys, enum_key
-from erdify_studio._layout import Layout, Position, load_existing_layout, save_layout
+from erdify_studio._errors import LayoutError
+from erdify_studio._layout import (
+    MAX_COORDINATE,
+    Layout,
+    Position,
+    load_existing_layout,
+    save_layout,
+)
 
 #: Minimum space between two boxes, in canvas units.
 GAP = 40
@@ -159,7 +166,8 @@ def place_layout(
                 return found
             return found & content.entities
 
-        # Own boxes first: a group diagram is anchored by its own entities.
+        # Own boxes before foreign ones among equals, so a group diagram without
+        # placed boxes is anchored by its own entities.
         unplaced = sorted(content.entities - positions.keys())
         unplaced += sorted(content.foreign - content.entities - positions.keys())
         new = _place(positions, unplaced, size, related)
@@ -230,7 +238,7 @@ def _next_to(
             (nx - GAP - w, ny),
             (nx, ny - GAP - h),
         ):
-            if _free((*spot, w, h), rects):
+            if _in_range((*spot, w, h)) and _free((*spot, w, h), rects):
                 return spot
     return None
 
@@ -238,15 +246,29 @@ def _next_to(
 def _grid_slot(
     box: _Size, origin: Position, start: int, rects: list[_Rect]
 ) -> tuple[Position, int]:
-    """The first free grid slot from ``start`` on, and its index."""
+    """The first free grid slot from ``start`` on, and its index.
+
+    Raises:
+        LayoutError: The grid reaches past ``MAX_COORDINATE``.
+    """
     w, h = box
     slot = start
     while True:
         row, column = divmod(slot, GRID_COLUMNS)
         spot = (origin[0] + column * GRID_COLUMN, origin[1] + row * GRID_ROW)
+        if not _in_range((*spot, w, h)):
+            raise LayoutError(
+                f"no room for a new box at {spot!r}: positions are limited to "
+                f"\u00b1{MAX_COORDINATE}; move the boxes near the limit"
+            )
         if _free((*spot, w, h), rects):
             return spot, slot
         slot += 1
+
+
+def _in_range(rect: _Rect) -> bool:
+    x, y, w, h = rect
+    return min(x, y) >= -MAX_COORDINATE and max(x + w, y + h) <= MAX_COORDINATE
 
 
 def _free(rect: _Rect, rects: Iterable[_Rect]) -> bool:

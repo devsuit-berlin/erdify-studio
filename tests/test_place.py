@@ -8,7 +8,9 @@ import pytest
 
 from erdify_studio import (
     OVERVIEW,
+    DuplicateKeyError,
     Layout,
+    LayoutError,
     PlaceResult,
     Position,
     Problem,
@@ -55,7 +57,11 @@ ALL = ("billing.invoices", "billing.lines", "core.customers")
 
 #: Smallest box: the minimum width and a header plus one field row (``id``).
 MIN_WIDTH, MIN_HEIGHT = 200, 54
+#: Height of one field row.
+ROW = 22
 GAP = 40
+#: Largest absolute coordinate of a position.
+MAX_COORDINATE = 10**9
 
 
 def _project(root: Path, models: str = MODELS, studio: str = "", erdify: str = "") -> Path:
@@ -97,9 +103,19 @@ def _tables(names: list[str], links: dict[str, str] | None = None) -> str:
     return "\n".join(lines)
 
 
-def _apart(a: Position, b: Position) -> bool:
-    """True when two smallest boxes at ``a`` and ``b`` keep ``GAP`` between them."""
-    return abs(a[0] - b[0]) >= MIN_WIDTH + GAP or abs(a[1] - b[1]) >= MIN_HEIGHT + GAP
+def _apart(a: Position, b: Position, height_a: int, height_b: int) -> bool:
+    """True when two boxes of the minimum width keep ``GAP`` between them."""
+    above = height_a if a[1] <= b[1] else height_b
+    return abs(a[0] - b[0]) >= MIN_WIDTH + GAP or abs(a[1] - b[1]) >= above + GAP
+
+
+def _no_overlaps(positions: dict[str, Position], links: dict[str, str]) -> bool:
+    """True when no two boxes come closer than ``GAP``; a linked table has a second row."""
+    height = {key: MIN_HEIGHT + (ROW if key in links else 0) for key in positions}
+    return all(
+        _apart(positions[a], positions[b], height[a], height[b])
+        for a, b in combinations(sorted(positions), 2)
+    )
 
 
 # --- first run, determinism ------------------------------------------------------
@@ -168,6 +184,32 @@ def test_an_empty_project_with_allow_empty_gets_an_empty_overview(tmp_path: Path
     result = _place(root)
     assert result.layout.diagrams == {OVERVIEW: {}}
     assert (root / "erdify-layout.json").exists()
+
+
+def test_duplicate_layout_keys_are_refused_before_writing(tmp_path: Path) -> None:
+    models = MODELS.replace('__tablename__ = "lines"', '__tablename__ = "invoices"')
+    root = _project(tmp_path, models)
+    with pytest.raises(DuplicateKeyError, match="'Invoice' and 'Line'"):
+        _place(root)
+    assert not (root / "erdify-layout.json").exists()
+
+
+def test_no_room_within_the_coordinate_limit_is_an_error(tmp_path: Path) -> None:
+    # A box at the limit: the grid right of the diagram starts past it.
+    root = _project(tmp_path, studio='group_by = "none"\n', erdify="no_relationships = true\n")
+    layout = Layout()
+    layout.set_position(OVERVIEW, "billing.lines", MAX_COORDINATE - 300, 0)
+    with pytest.raises(LayoutError, match="no room for a new box"):
+        _place(root, layout)
+
+
+def test_a_neighbour_near_the_limit_gets_a_spot_inside_it(tmp_path: Path) -> None:
+    root = _project(tmp_path, studio='group_by = "none"\n')
+    layout = Layout()
+    layout.set_position(OVERVIEW, "core.customers", MAX_COORDINATE - 300, 0)
+    positions = _place(root, layout).layout.diagrams[OVERVIEW]
+    # Not right of it (past the limit) but below it.
+    assert positions["billing.invoices"] == (MAX_COORDINATE - 300, MIN_HEIGHT + GAP)
 
 
 def test_a_project_without_entities_is_refused(tmp_path: Path) -> None:
@@ -276,7 +318,7 @@ def test_a_crowded_neighbour_still_gives_no_overlaps(tmp_path: Path) -> None:
     layout.set_position(OVERVIEW, "hub", 0, 0)
     positions = _place(root, layout).layout.diagrams[OVERVIEW]
     assert len(positions) == 7
-    assert all(_apart(a, b) for a, b in combinations(positions.values(), 2))
+    assert _no_overlaps(positions, {spoke: "hub" for spoke in spokes})
     assert _check(root) == []
 
 
@@ -285,7 +327,7 @@ def test_many_new_boxes_do_not_overlap(tmp_path: Path) -> None:
     links = {name: names[i // 3] for i, name in enumerate(names) if i % 4 and i // 3 != i}
     root = _project(tmp_path, models=_tables(names, links))
     positions = _place(root).layout.diagrams[OVERVIEW]
-    assert all(_apart(a, b) for a, b in combinations(positions.values(), 2))
+    assert _no_overlaps(positions, links)
 
 
 def test_a_self_reference_is_no_neighbour(tmp_path: Path) -> None:
