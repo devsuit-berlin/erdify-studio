@@ -337,7 +337,8 @@ def test_without_relationships_new_boxes_go_to_the_grid(tmp_path: Path) -> None:
     layout = Layout()
     layout.set_position(OVERVIEW, "core.customers", 0, 0)
     result = _place(root, layout)
-    # Not next to its neighbour (right of it at the same height) but a grid row lower.
+    # invoices lands on the grid origin; lines takes the next grid column (520),
+    # not a spot next to invoices (480).
     assert [result.layout.diagrams[OVERVIEW][k] for k in ("billing.invoices", "billing.lines")] == [
         (MIN_WIDTH + GAP, 0),
         (MIN_WIDTH + GAP + 280, 0),

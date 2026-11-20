@@ -262,7 +262,7 @@ def _grid_slot(
         row, column = divmod(slot, GRID_COLUMNS)
         spot = (origin[0] + column * GRID_COLUMN, origin[1] + row * GRID_ROW)
         if not _in_range((*spot, w, h)):
-            if column and spot[1] >= origin[1] and _in_range((origin[0], spot[1], w, h)):
+            if column and _in_range((origin[0], spot[1], w, h)):
                 slot += GRID_COLUMNS - column  # past the limit in x only: next row
                 continue
             raise LayoutError(
