@@ -132,7 +132,7 @@ def build_overview(project: Project, config: StudioConfig, *, shown_path: str) -
 
     Raises:
         ProjectError: The project has no entities and erdify's ``allow_empty`` is off.
-        DuplicateKeyError: Two entities have the same layout key.
+        DuplicateKeyError: An entity keyed by its erdify name has another entity's key.
         LayoutVersionError: The layout file is of another version.
         LayoutError: A reserved group name, or a layout file that cannot be read.
         OSError: The layout file cannot be read.
