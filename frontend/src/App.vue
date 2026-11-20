@@ -15,6 +15,8 @@ const newKeys = ref<Set<string>>(new Set());
 // What the file lacks before anything is dragged (from the server); cleared by a save.
 const pendingShown = ref(false);
 const moved = ref(false);
+// Counts drags, so a save only clears "unsaved" when nothing moved while it ran.
+let edits = 0;
 const saving = ref(false);
 
 const dirty = computed(() => pendingShown.value || moved.value);
@@ -36,16 +38,18 @@ const banner = computed(() => {
 function onMove(key: string, position: Position): void {
   positions.value = { ...positions.value, [key]: position };
   moved.value = true;
+  edits += 1;
 }
 
 async function save(): Promise<void> {
   if (!overview.value || saving.value || !dirty.value) return;
   saving.value = true;
+  const editsAtSave = edits;
   try {
     const outcome = await saveLayout(revision.value, positions.value);
     if (outcome.ok) {
       revision.value = outcome.revision;
-      moved.value = false;
+      moved.value = edits !== editsAtSave;
       pendingShown.value = false;
       newKeys.value = new Set();
       toast.add({ title: `Saved to ${outcome.saved}`, color: "success", icon: "i-lucide-check" });

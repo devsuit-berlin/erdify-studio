@@ -118,17 +118,23 @@ const ordered = computed(() => {
   return key ? [...props.overview.boxes.filter((b) => b.key !== key), ...props.overview.boxes.filter((b) => b.key === key)] : props.overview.boxes;
 });
 
+// The pointer is captured by the <svg>, not the box: the dragged box is re-inserted
+// on top, and an element leaving the DOM loses its pointer capture.
 function onBoxDown(event: PointerEvent, key: string): void {
   if (event.button !== 0) return;
   event.stopPropagation();
   const rect = rects.value[key];
   dragging.value = { key, pointer: event.pointerId, x: event.clientX, y: event.clientY, bx: rect.x, by: rect.y };
-  (event.currentTarget as Element).setPointerCapture(event.pointerId);
+  svg.value?.setPointerCapture(event.pointerId);
 }
 
 function onBoxMove(event: PointerEvent): void {
   const drag = dragging.value;
   if (!drag || drag.pointer !== event.pointerId) return;
+  if ((event.buttons & 1) === 0) {
+    dragging.value = null; // the release was missed (e.g. outside the window)
+    return;
+  }
   const { scale } = view.value;
   const x = Math.round(drag.bx + (event.clientX - drag.x) / scale);
   const y = Math.round(drag.by + (event.clientY - drag.y) / scale);
@@ -149,7 +155,15 @@ defineExpose({ fit });
 
 <template>
   <div class="relative h-full w-full overflow-hidden bg-muted">
-    <svg ref="svg" class="h-full w-full touch-none select-none" @wheel="onWheel">
+    <svg
+      ref="svg"
+      class="h-full w-full touch-none select-none"
+      @wheel="onWheel"
+      @pointermove="onBoxMove"
+      @pointerup="onBoxUp"
+      @pointercancel="onBoxUp"
+      @lostpointercapture="onBoxUp"
+    >
       <rect
         class="cursor-move"
         width="100%"
@@ -193,9 +207,6 @@ defineExpose({ fit });
           :is-new="newKeys.has(box.key)"
           :dragging="dragging?.key === box.key"
           @pointerdown="onBoxDown($event, box.key)"
-          @pointermove="onBoxMove"
-          @pointerup="onBoxUp"
-          @pointercancel="onBoxUp"
         />
       </g>
     </svg>
