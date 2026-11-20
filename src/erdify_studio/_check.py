@@ -6,7 +6,7 @@ from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 from typing import Literal
 
-from erdify import EntityInfo, Project, diagram_edges
+from erdify import EntityInfo, Project, diagram_edges, enum_users
 
 from erdify_studio._config import GroupBy, StudioConfig
 from erdify_studio._entities import entity_groups, entity_keys, enum_key
@@ -14,7 +14,7 @@ from erdify_studio._errors import ProjectError
 from erdify_studio._layout import OVERVIEW, Layout, load_existing_layout
 
 #: How a layout differs from its diagrams (see ``Problem``).
-ProblemKind = Literal["unplaced", "foreign", "stale_entry", "stale_diagram"]
+ProblemKind = Literal["unplaced", "foreign", "enum", "stale_entry", "stale_diagram"]
 
 
 @dataclass(frozen=True)
@@ -25,10 +25,18 @@ class DiagramContent:
         entities: Keys of the diagram's own entities (every entity on the overview).
         foreign: Keys of foreign boxes: entities of other groups that an own entity
             references or is referenced by. Always empty on the overview.
+        enums: Keys of the enums erdify draws that an own entity uses (every drawn
+            enum on the overview).
     """
 
     entities: frozenset[str]
     foreign: frozenset[str] = field(default_factory=frozenset)
+    enums: frozenset[str] = field(default_factory=frozenset)
+
+    @property
+    def shown(self) -> frozenset[str]:
+        """Every key the diagram shows."""
+        return self.entities | self.foreign | self.enums
 
 
 @dataclass(frozen=True)
@@ -39,7 +47,8 @@ class Problem:
         diagram: The diagram it is in.
         key: The layout key; None for a ``stale_diagram``.
         kind: ``unplaced`` (an own entity has no position), ``foreign`` (a foreign
-            box has no position), ``stale_entry`` (a position for a key the diagram
+            box has no position), ``enum`` (a drawn enum has no position),
+            ``stale_entry`` (a position for a key the diagram
             does not show) or ``stale_diagram`` (a diagram that no longer exists).
     """
 
@@ -55,11 +64,17 @@ class Problem:
             return f"{where}: entity {self.key!r} has no position"
         if self.kind == "foreign":
             return f"{where}: foreign box {self.key!r} has no position"
+        if self.kind == "enum":
+            return f"{where}: enum {self.key!r} has no position"
         return f"{where}: stale entry {self.key!r}: not in this diagram"
 
 
 def diagram_contents(
-    entities: Mapping[str, EntityInfo], group_by: GroupBy, *, relationships: bool = True
+    entities: Mapping[str, EntityInfo],
+    group_by: GroupBy,
+    *,
+    relationships: bool = True,
+    enums: Mapping[str, Collection[str]] | None = None,
 ) -> dict[str, DiagramContent]:
     """Map every diagram (the overview and one per group) to the keys it shows.
 
@@ -67,6 +82,10 @@ def diagram_contents(
     another group connected to one of them by an edge of ``erdify.diagram_edges``,
     in either direction. Without ``relationships`` (erdify's ``no_relationships``)
     erdify draws no edges, so there are no foreign boxes.
+
+    ``enums`` maps the layout key of every enum erdify draws to the names of the
+    entities using it (``erdify.enum_users``): the overview shows every one, a group
+    diagram those its own entities use.
 
     Raises:
         DuplicateKeyError: Two entities have the same layout key.
@@ -85,18 +104,21 @@ def diagram_contents(
                 foreign[groups[source]].add(keys[target])
                 foreign[groups[target]].add(keys[source])
 
-    contents = {OVERVIEW: DiagramContent(frozenset(keys.values()))}
+    used: dict[str, set[str]] = {group: set() for group in own}
+    for key, users in (enums or {}).items():
+        for name in users:
+            if groups:
+                used[groups[name]].add(key)
+
+    contents = {OVERVIEW: DiagramContent(frozenset(keys.values()), enums=frozenset(enums or {}))}
     for group in own:
-        contents[group] = DiagramContent(frozenset(own[group]), frozenset(foreign[group]))
+        contents[group] = DiagramContent(
+            frozenset(own[group]), frozenset(foreign[group]), frozenset(used[group])
+        )
     return contents
 
 
-def check_layout(
-    layout: Layout,
-    diagrams: Mapping[str, DiagramContent],
-    *,
-    unchecked: Collection[str] = frozenset(),
-) -> list[Problem]:
+def check_layout(layout: Layout, diagrams: Mapping[str, DiagramContent]) -> list[Problem]:
     """Return how ``layout`` differs from ``diagrams``; empty when it matches.
 
     Sorted by diagram (the overview first), then key.
@@ -106,17 +128,14 @@ def check_layout(
     Args:
         layout: The layout to check.
         diagrams: What each diagram shows (``diagram_contents``).
-        unchecked: Keys whose positions are kept in any diagram but not required,
-            e.g. the ``enum_key`` of every existing enum until erdify tells which
-            enums it draws.
     """
     problems: list[Problem] = []
     for name, content in diagrams.items():
         placed = layout.diagrams.get(name, {})
         problems += [Problem(name, key, "unplaced") for key in content.entities - placed.keys()]
         problems += [Problem(name, key, "foreign") for key in content.foreign - placed.keys()]
-        shown = content.entities | content.foreign | set(unchecked)
-        problems += [Problem(name, key, "stale_entry") for key in placed.keys() - shown]
+        problems += [Problem(name, key, "enum") for key in content.enums - placed.keys()]
+        problems += [Problem(name, key, "stale_entry") for key in placed.keys() - content.shown]
     problems += [
         Problem(name, None, "stale_diagram") for name in layout.diagrams.keys() - diagrams.keys()
     ]
@@ -127,8 +146,8 @@ def check_layout(
 def check_project(project: Project, config: StudioConfig) -> list[Problem] | None:
     """Check the layout file of ``config`` against ``project``.
 
-    Positions of existing enums are kept but not required: erdify does not yet
-    tell which enums it draws (erdify#369).
+    Every enum erdify draws needs a position on the overview and on the group
+    diagrams of the entities using it.
 
     Args:
         project: The project as ``erdify.load_project`` returns it; load it with
@@ -151,7 +170,7 @@ def check_project(project: Project, config: StudioConfig) -> list[Problem] | Non
     layout = load_existing_layout(config.layout)
     if layout is None:
         return None
-    return check_layout(layout, diagrams, unchecked=enum_keys(project))
+    return check_layout(layout, diagrams)
 
 
 def project_diagrams(project: Project, config: StudioConfig) -> dict[str, DiagramContent]:
@@ -172,9 +191,11 @@ def project_diagrams(project: Project, config: StudioConfig) -> dict[str, Diagra
         project.entities,
         config.group_by,
         relationships=not project.settings.no_relationships,
+        enums=drawn_enums(project),
     )
 
 
-def enum_keys(project: Project) -> frozenset[str]:
-    """Layout keys of the project's enums: kept in any diagram, but not required yet."""
-    return frozenset(enum_key(enum) for enum in project.enums.values())
+def drawn_enums(project: Project) -> dict[str, list[str]]:
+    """Layout key of every enum erdify draws -> the names of the entities using it."""
+    users = enum_users(project.entities, project.enums, include_enums=not project.settings.no_enums)
+    return {enum_key(project.enums[name]): entities for name, entities in users.items()}

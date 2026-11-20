@@ -42,8 +42,10 @@ plus a `[tool.erdify-studio]` section.
 erdify-studio check [path]   # path: the input erdify reads (default: .)
 ```
 
-Exits 1 with one line per problem when an entity or a foreign box (an entity of
-another group connected by a relationship) has no position in a diagram, or the
+Exits 1 with one line per problem when an entity, a foreign box (an entity of
+another group connected by a relationship) or an enum erdify draws has no position in
+a diagram (an enum belongs on the overview and on the group diagrams of the entities
+using it), or the
 layout file holds entries or diagrams that no longer exist, or there is no layout file
 yet (missing or empty); the last line suggests
 `erdify-studio place --auto`. Exits 0 without output when the layout is up to date,
@@ -78,12 +80,12 @@ erdify-studio place --auto [path]
 
 Fixes what `check` reports, without opening the browser:
 
-- An entity or foreign box without a position goes next to a placed box it has a
-  relationship with (right, below, left or above — the first free spot), otherwise into
-  the first free slot of a grid right of the diagram.
+- An entity, foreign box or enum without a position goes next to a placed box it has a
+  relationship with, or for an enum an entity using it (right, below, left or above —
+  the first free spot), otherwise into the first free slot of a grid right of the
+  diagram.
 - Boxes that already have a position never move.
-- Entries and diagrams that no longer exist are removed (one line each); positions of
-  existing enums are kept.
+- Entries and diagrams that no longer exist are removed (one line each).
 - Without a layout file it creates one with every diagram.
 
 The result is deterministic — run twice, same bytes — and the file is only written when
@@ -102,20 +104,8 @@ export_dir = "docs/erd"                  # optional; omitted = no committed SVGs
 
 `group_by = "auto"` picks, per entity, its database schema, else its Django app, else its
 Python module. Entities are keyed in the layout file by `schema.table` (or `table`), so
-renaming a class keeps its position.
-
-## Known limitations
-
-- SQL DDL with same-name tables in different schemas (`core.customer`, `mart.customer`)
-  is read as one table by erdify for now
-  ([erdify#353](https://github.com/devsuit-berlin/erdify/issues/353)).
-- `check` keeps but does not require positions for enums yet: erdify has no public API for which
-  enums it draws and which entities use them
-  ([erdify#369](https://github.com/devsuit-berlin/erdify/issues/369)).
-- A foreign key that names the schema (`foreign_key="core.customers.id"`) gives no
-  relationship in erdify for now, so `check` requires no foreign box for it; once erdify
-  fixes it, those foreign boxes are required
-  ([erdify#373](https://github.com/devsuit-berlin/erdify/issues/373)).
+renaming a class keeps its position; same-name tables in different schemas get their
+own key. Enums are keyed `enum:<name>`.
 
 ## Contributing
 

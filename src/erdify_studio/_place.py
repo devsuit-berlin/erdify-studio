@@ -4,7 +4,8 @@ Placement is deterministic and never moves a placed box. Boxes are taken in key
 order, preferring keys connected to an already placed box: such a box goes next
 to its first placed neighbour (right, below, left, above). A box without a placed
 neighbour goes to the first free slot of a grid right of the boxes that were
-placed before. No two boxes come closer than ``GAP``.
+placed before. An enum is connected to the entities using it. No two boxes come
+closer than ``GAP``.
 
 Box sizes are estimates from the text a box shows (title and one row per field),
 so placing works without a browser; keep them in sync with the canvas (#5).
@@ -17,7 +18,7 @@ from dataclasses import dataclass
 
 from erdify import EntityInfo, Project, diagram_edges
 
-from erdify_studio._check import DiagramContent, enum_keys, project_diagrams
+from erdify_studio._check import DiagramContent, drawn_enums, project_diagrams
 from erdify_studio._config import StudioConfig
 from erdify_studio._entities import entity_keys, enum_key
 from erdify_studio._errors import LayoutError
@@ -85,7 +86,7 @@ def place_project(project: Project, config: StudioConfig) -> PlaceResult:
 
     Writes the layout file of ``config`` when anything changed, or creates it with
     every diagram when there is none yet; afterwards ``check_project`` passes.
-    Positions of existing enums are kept but not added (erdify#369).
+    Enums erdify draws are placed like entities, next to an entity using them.
 
     Args:
         project: The project as ``erdify.load_project`` returns it; load it with
@@ -104,12 +105,12 @@ def place_project(project: Project, config: StudioConfig) -> PlaceResult:
     existing = load_existing_layout(config.layout)
     sizes = _entity_sizes(project)
     edges = _key_edges(project) if not project.settings.no_relationships else frozenset()
+    edges |= _enum_edges(project)
     result = place_layout(
         existing or Layout(),
         diagrams,
         sizes=sizes,
         edges=edges,
-        kept=enum_keys(project),
         created=existing is None,
     )
     if result.changed:
@@ -123,7 +124,6 @@ def place_layout(
     *,
     sizes: Mapping[str, _Size],
     edges: Collection[tuple[str, str]],
-    kept: Collection[str] = frozenset(),
     created: bool = False,
 ) -> PlaceResult:
     """Return ``layout`` with every box of ``diagrams`` placed and stale entries dropped.
@@ -135,7 +135,6 @@ def place_layout(
         diagrams: What each diagram shows (``diagram_contents``).
         sizes: Size of an own box per key; a foreign box shows the name only.
         edges: Connected key pairs, in either direction.
-        kept: Keys whose positions are kept in any diagram but never added.
         created: Passed through to ``PlaceResult.created``.
     """
     neighbours: dict[str, set[str]] = {}
@@ -150,26 +149,26 @@ def place_layout(
     for name in sorted(diagrams):
         content = diagrams[name]
         old = layout.diagrams.get(name, {})
-        shown = content.entities | content.foreign
-        positions = {key: pos for key, pos in old.items() if key in shown or key in kept}
+        shown = content.shown
+        own = content.entities | content.enums
+        positions = {key: pos for key, pos in old.items() if key in shown}
         removed += [(name, key) for key in sorted(old.keys() - positions.keys())]
 
         def size(key: str, content: DiagramContent = content) -> _Size:
-            if key in content.foreign and key not in content.entities:
-                return _box(key, ())
-            return sizes[key]
+            if key in own:
+                return sizes[key]
+            return _box(key, ())  # a foreign box shows the name only
 
-        def related(key: str, content: DiagramContent = content) -> set[str]:
+        def related(key: str, own: frozenset[str] = own, shown: frozenset[str] = shown) -> set[str]:
             # A foreign box belongs next to the own boxes it is connected with.
             found = neighbours.get(key, set()) & shown
-            if key in content.entities:
-                return found
-            return found & content.entities
+            return found if key in own else found & own
 
-        # Own boxes before foreign ones among equals, so a group diagram without
-        # placed boxes is anchored by its own entities.
+        # Among equals entities first, then enums, then foreign boxes, so a diagram
+        # without placed boxes is anchored by its own entities.
         unplaced = sorted(content.entities - positions.keys())
-        unplaced += sorted(content.foreign - content.entities - positions.keys())
+        unplaced += sorted(content.enums - positions.keys())
+        unplaced += sorted(content.foreign - own - positions.keys())
         new = _place(positions, unplaced, size, related)
         placed += [(name, key) for key in sorted(new)]
         result.add_diagram(name)
@@ -306,6 +305,13 @@ def _entity_box(key: str, entity: EntityInfo) -> _Size:
 def _box(title: str, rows: Collection[str]) -> _Size:
     longest = max((len(text) for text in (title, *rows)), default=0)
     return max(_MIN_WIDTH, longest * _CHAR_WIDTH + _PADDING), _HEADER + _ROW * len(rows)
+
+
+def _enum_edges(project: Project) -> frozenset[tuple[str, str]]:
+    keys = entity_keys(project.entities)
+    return frozenset(
+        (enum, keys[name]) for enum, users in drawn_enums(project).items() for name in users
+    )
 
 
 def _key_edges(project: Project) -> frozenset[tuple[str, str]]:

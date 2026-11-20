@@ -43,14 +43,14 @@ class Invoice(SQLModel, table=True):
     __tablename__ = "invoices"
     __table_args__ = {"schema": "billing"}
     id: int = Field(primary_key=True)
-    customer_id: int = Field(foreign_key="customers.id")
+    customer_id: int = Field(foreign_key="core.customers.id")
 
 
 class Line(SQLModel, table=True):
     __tablename__ = "lines"
     __table_args__ = {"schema": "billing"}
     id: int = Field(primary_key=True)
-    invoice_id: int = Field(foreign_key="invoices.id")
+    invoice_id: int = Field(foreign_key="billing.invoices.id")
 """
 
 ALL = ("billing.invoices", "billing.lines", "core.customers")
@@ -257,15 +257,54 @@ def test_stale_entries_and_diagrams_are_removed(tmp_path: Path) -> None:
     assert _check(root) == []
 
 
-def test_positions_of_existing_enums_are_kept_but_none_are_added(tmp_path: Path) -> None:
-    root = _project(tmp_path, studio='group_by = "none"\n')
+#: ``MODELS`` with ``billing.invoices`` using the ``Status`` enum.
+WITH_ENUM = MODELS.replace(
+    'customer_id: int = Field(foreign_key="core.customers.id")',
+    'customer_id: int = Field(foreign_key="core.customers.id")\n    status: Status',
+)
+
+
+def test_a_drawn_enum_goes_next_to_an_entity_using_it(tmp_path: Path) -> None:
+    root = _project(tmp_path, WITH_ENUM, studio='group_by = "none"\n')
     layout = Layout()
-    layout.set_position(OVERVIEW, "enum:Status", 900, 900)
-    layout.set_position(OVERVIEW, "enum:Gone", 0, 0)
+    for i, key in enumerate(ALL):
+        layout.set_position(OVERVIEW, key, i * 1000, 0)
+    layout.set_position(OVERVIEW, "enum:Gone", 0, 500)
     result = _place(root, layout)
+    assert result.placed == ((OVERVIEW, "enum:Status"),)
     assert result.removed == ((OVERVIEW, "enum:Gone"),)
-    assert result.layout.diagrams[OVERVIEW]["enum:Status"] == (900, 900)
-    assert "enum:Status" not in {key for _, key in result.placed}
+    # Right of billing.invoices (at x 0), at its height.
+    x, y = result.layout.diagrams[OVERVIEW]["enum:Status"]
+    assert (y, MIN_WIDTH + GAP <= x < 1000) == (0, True)
+    assert _check(root) == []
+
+
+def test_enums_are_placed_where_check_requires_them(tmp_path: Path) -> None:
+    root = _project(tmp_path, WITH_ENUM)
+    diagrams = _place(root).layout.diagrams
+    assert {d for d, positions in diagrams.items() if "enum:Status" in positions} == {
+        OVERVIEW,
+        "billing",
+    }
+    assert _check(root) == []
+
+
+def test_with_no_enums_no_enum_is_placed(tmp_path: Path) -> None:
+    root = _project(tmp_path, WITH_ENUM, erdify="no_enums = true\n")
+    diagrams = _place(root).layout.diagrams
+    assert not any("enum:Status" in positions for positions in diagrams.values())
+
+
+def test_same_name_sql_tables_in_two_schemas_get_two_positions(tmp_path: Path) -> None:
+    (tmp_path / "schema.sql").write_text(
+        "CREATE TABLE core.customer (id INT PRIMARY KEY);\n"
+        "CREATE TABLE mart.customer (id INT PRIMARY KEY, "
+        "src_id INT REFERENCES core.customer(id));\n"
+    )
+    (tmp_path / "pyproject.toml").write_text('[tool.erdify]\ninclude = ["*.sql"]\n')
+    positions = _place(tmp_path).layout.diagrams[OVERVIEW]
+    assert set(positions) == {"core.customer", "mart.customer"}
+    assert _check(tmp_path) == []
 
 
 # --- where new boxes go -------------------------------------------------------------
@@ -320,7 +359,7 @@ class Payment(SQLModel, table=True):
     __table_args__ = {"schema": "billing"}
     id: int = Field(primary_key=True)
     customer_id: int = Field(foreign_key="customers.id")
-    invoice_id: int = Field(foreign_key="invoices.id")
+    invoice_id: int = Field(foreign_key="billing.invoices.id")
 """
     )
     root = _project(tmp_path, models)
