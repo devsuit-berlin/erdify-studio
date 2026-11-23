@@ -77,8 +77,8 @@ function hashTarget(): string {
   return loaded.value?.diagrams.some((d) => d.name === wanted) ? wanted! : OVERVIEW;
 }
 
-// Editing the hash in the address bar (or a link to it) switches diagrams; a hash
-// that names no diagram (`#foo`, an emptied one) is left alone.
+// Editing the hash in the address bar (or a link to it) switches diagrams; an unknown
+// `#diagram=` value goes to the overview, any other hash (`#foo`, `#`) is left alone.
 function onHashChange(): void {
   if (loaded.value && hashDiagram() !== null) select(hashTarget());
 }
