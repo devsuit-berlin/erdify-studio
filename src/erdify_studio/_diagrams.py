@@ -1,4 +1,4 @@
-"""The overview diagram as the canvas draws it, as JSON-ready dicts.
+"""Every diagram as the canvas draws it, as JSON-ready dicts.
 
 Python owns everything the canvas shows: the boxes with their sizes (from
 ``_place``, so the canvas and ``place --auto`` agree), positions including the
@@ -15,12 +15,18 @@ from typing import Literal, TypedDict
 
 from erdify import EdgeEnd, Project, diagram_edges
 
-from erdify_studio._check import drawn_enums, project_diagrams
+from erdify_studio._check import DiagramContent, drawn_enums, project_diagrams
 from erdify_studio._config import StudioConfig
-from erdify_studio._entities import entity_ids, entity_keys, enum_key
+from erdify_studio._entities import entity_groups, entity_ids, entity_keys, enum_key
 from erdify_studio._errors import LayoutConflictError, LayoutError, PositionsError
-from erdify_studio._layout import OVERVIEW, Layout, load_existing_layout, save_layout
-from erdify_studio._place import METRICS, PlaceResult, place_inputs, place_layout
+from erdify_studio._layout import (
+    DEFAULT_GROUP,
+    OVERVIEW,
+    Layout,
+    load_existing_layout,
+    save_layout,
+)
+from erdify_studio._place import METRICS, PlaceResult, name_box_size, place_inputs, place_layout
 
 
 class FieldRow(TypedDict):
@@ -40,17 +46,17 @@ class ValueRow(TypedDict):
     name: str
 
 
-class Box(TypedDict):
-    """An entity or enum box at its position (top-left), in canvas units."""
+class BoxDef(TypedDict):
+    """An entity or enum box, sent once for every diagram that shows it.
 
-    key: str
+    ``group`` is the entity's group diagram; None for enums and without groups.
+    """
+
     kind: Literal["entity", "enum"]
     title: str
-    x: int
-    y: int
+    group: str | None
     width: int
     height: int
-    new: bool
     rows: list[FieldRow] | list[ValueRow]
 
 
@@ -85,26 +91,50 @@ class EnumLink(TypedDict):
 class Pending(TypedDict):
     """What Save would change before anything is dragged.
 
-    ``placed``: new overview boxes. ``groupChanges``: boxes placed on group diagrams
-    plus stale entries and diagrams dropped. ``created``: there is no layout file yet.
+    ``placed``: boxes placed automatically, over all diagrams. ``diagrams``: how many
+    diagrams have such boxes. ``dropped``: stale entries plus stale diagrams.
+    ``created``: there is no layout file yet.
     """
 
     placed: int
-    groupChanges: int
+    diagrams: int
+    dropped: int
     created: bool
 
 
-class Overview(TypedDict):
-    """The JSON of ``GET /api/overview``."""
+class DiagramJson(TypedDict):
+    """One diagram: the keys it shows, where, and what it draws between them.
 
-    metrics: dict[str, int]
-    boxes: list[Box]
+    ``own``: its entities and enums; ``foreign``: name-only boxes of other groups,
+    sized by ``foreignSizes``; ``positions``: every shown key (top-left, canvas
+    units); ``new``: keys placed automatically, not yet in the layout file.
+    """
+
+    name: str
+    label: str
+    own: list[str]
+    foreign: list[str]
+    foreignSizes: dict[str, list[int]]
+    positions: dict[str, list[int]]
+    new: list[str]
     edges: list[EdgeJson]
     enumLinks: list[EnumLink]
+
+
+class Diagrams(TypedDict):
+    """The JSON of ``GET /api/diagrams``."""
+
+    metrics: dict[str, int]
+    boxes: dict[str, BoxDef]
+    diagrams: list[DiagramJson]
     revision: str | None
     pending: Pending
     layoutPath: str
     projectPath: str
+
+
+#: Labels of the diagrams that aren't named after a group.
+_LABELS = {OVERVIEW: "Overview", DEFAULT_GROUP: "Ungrouped"}
 
 
 def layout_revision(path: Path) -> str | None:
@@ -119,11 +149,12 @@ def layout_revision(path: Path) -> str | None:
         return None
 
 
-def build_overview(project: Project, config: StudioConfig, *, shown_path: str) -> Overview:
-    """The overview of ``project`` with the positions of its layout file.
+def build_diagrams(project: Project, config: StudioConfig, *, shown_path: str) -> Diagrams:
+    """Every diagram of ``project`` with the positions of its layout file.
 
     Boxes without a position get the one ``place --auto`` would give them and are
-    marked ``new``. Nothing is written.
+    listed as ``new``. Nothing is written. Order: the overview, the groups by name,
+    ``DEFAULT_GROUP`` last.
 
     Args:
         project: The project as ``erdify.load_project(..., strict=True)`` returns it.
@@ -138,44 +169,49 @@ def build_overview(project: Project, config: StudioConfig, *, shown_path: str) -
         OSError: The layout file cannot be read.
     """
     revision = layout_revision(config.layout)
-    diagrams = project_diagrams(project, config)
+    contents = project_diagrams(project, config)
     existing = load_existing_layout(config.layout)
     sizes, edges = place_inputs(project)
     result = place_layout(
-        existing or Layout(), diagrams, sizes=sizes, edges=edges, created=existing is None
+        existing or Layout(), contents, sizes=sizes, edges=edges, created=existing is None
     )
-    positions = result.layout.diagrams[OVERVIEW]
-    new = {key for diagram, key in result.placed if diagram == OVERVIEW}
-    shown = diagrams[OVERVIEW]
+    all_edges = _edges(project)
+    all_links = _enum_links(project)
+    new: dict[str, list[str]] = {}
+    for diagram, key in result.placed:
+        new.setdefault(diagram, []).append(key)
 
-    keys = entity_keys(project.entities)
-    boxes: list[Box] = []
-    for name, entity in project.entities.items():
-        key = keys[name]
-        rows: list[FieldRow] = [
+    def order(name: str) -> tuple[int, str]:
+        return (0 if name == OVERVIEW else 2 if name == DEFAULT_GROUP else 1, name)
+
+    diagrams: list[DiagramJson] = []
+    for name in sorted(contents, key=order):
+        content = contents[name]
+        foreign = sorted(content.foreign - content.entities)
+        diagrams.append(
             {
-                "name": f.name,
-                "type": f.type_str,
-                "pk": f.is_primary_key,
-                "fk": f.is_foreign_key,
-                "uk": f.is_unique,
-                "nullable": f.is_nullable,
+                "name": name,
+                "label": _LABELS.get(name, name),
+                "own": sorted(content.entities | content.enums),
+                "foreign": foreign,
+                "foreignSizes": {key: list(name_box_size(key)) for key in foreign},
+                "positions": {
+                    key: [x, y] for key, (x, y) in sorted(result.layout.diagrams[name].items())
+                },
+                "new": sorted(new.get(name, [])),
+                "edges": [e for e in all_edges if content.shows_edge(e["from"], e["to"])],
+                "enumLinks": [
+                    link
+                    for link in all_links
+                    if content.shows_enum_link(link["enum"], link["entity"])
+                ],
             }
-            for f in entity.fields
-        ]
-        boxes.append(_box(key, "entity", key, rows, positions, sizes, new))
-    for enum in project.enums.values():
-        key = enum_key(enum)
-        if key in shown.enums:
-            values: list[ValueRow] = [{"name": str(value)} for value in enum.values]
-            boxes.append(_box(key, "enum", enum.name, values, positions, sizes, new))
-    boxes.sort(key=lambda box: box["key"])
+        )
 
     return {
         "metrics": dict(METRICS),
-        "boxes": boxes,
-        "edges": _edges(project),
-        "enumLinks": _enum_links(project),
+        "boxes": _boxes(project, config, sizes, contents[OVERVIEW]),
+        "diagrams": diagrams,
         "revision": revision,
         "pending": _pending(result),
         "layoutPath": shown_path,
@@ -252,28 +288,52 @@ def _checked(positions: object, shown: frozenset[str]) -> dict[str, tuple[float,
     return checked
 
 
-def _box(
-    key: str,
-    kind: Literal["entity", "enum"],
-    title: str,
-    rows: list[FieldRow] | list[ValueRow],
-    positions: dict[str, tuple[int, int]],
-    sizes: dict[str, tuple[int, int]],
-    new: set[str],
-) -> Box:
-    x, y = positions[key]
-    width, height = sizes[key]
-    return {
-        "key": key,
-        "kind": kind,
-        "title": title,
-        "x": x,
-        "y": y,
-        "width": width,
-        "height": height,
-        "new": key in new,
-        "rows": rows,
-    }
+def _boxes(
+    project: Project,
+    config: StudioConfig,
+    sizes: Mapping[str, tuple[int, int]],
+    overview: DiagramContent,
+) -> dict[str, BoxDef]:
+    """Every entity and drawn enum, by layout key, sorted."""
+    keys = entity_keys(project.entities)
+    groups = entity_groups(project.entities, config.group_by)
+    boxes: dict[str, BoxDef] = {}
+    for name, entity in project.entities.items():
+        key = keys[name]
+        rows: list[FieldRow] = [
+            {
+                "name": f.name,
+                "type": f.type_str,
+                "pk": f.is_primary_key,
+                "fk": f.is_foreign_key,
+                "uk": f.is_unique,
+                "nullable": f.is_nullable,
+            }
+            for f in entity.fields
+        ]
+        width, height = sizes[key]
+        boxes[key] = {
+            "kind": "entity",
+            "title": key,
+            "group": groups.get(name),
+            "width": width,
+            "height": height,
+            "rows": rows,
+        }
+    for enum in project.enums.values():
+        key = enum_key(enum)
+        if key in overview.enums:
+            values: list[ValueRow] = [{"name": str(value)} for value in enum.values]
+            width, height = sizes[key]
+            boxes[key] = {
+                "kind": "enum",
+                "title": enum.name,
+                "group": None,
+                "width": width,
+                "height": height,
+                "rows": values,
+            }
+    return dict(sorted(boxes.items()))
 
 
 def _end(end: EdgeEnd) -> EdgeEndJson:
@@ -312,12 +372,9 @@ def _enum_links(project: Project) -> list[EnumLink]:
 
 
 def _pending(result: PlaceResult) -> Pending:
-    placed = sum(1 for diagram, _ in result.placed if diagram == OVERVIEW)
     return {
-        "placed": placed,
-        "groupChanges": len(result.placed)
-        - placed
-        + len(result.removed)
-        + len(result.removed_diagrams),
+        "placed": len(result.placed),
+        "diagrams": len({diagram for diagram, _ in result.placed}),
+        "dropped": len(result.removed) + len(result.removed_diagrams),
         "created": result.created,
     }

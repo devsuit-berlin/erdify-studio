@@ -11,8 +11,8 @@ from typing import Any
 import erdify
 import pytest
 
-from erdify_studio import StudioConfig, load_config, place_project
-from erdify_studio._overview import build_overview, layout_revision
+from erdify_studio import OVERVIEW, StudioConfig, load_config, place_project
+from erdify_studio._diagrams import build_diagrams, layout_revision
 from erdify_studio._server import StudioServer, start_server
 
 MODELS = """\
@@ -128,7 +128,9 @@ def _overview(studio: Studio) -> dict[str, Any]:
 
 
 def _positions(studio: Studio) -> dict[str, list[int]]:
-    return {box["key"]: [box["x"], box["y"]] for box in _overview(studio)["boxes"]}
+    overview = next(d for d in _overview(studio)["diagrams"] if d["name"] == OVERVIEW)
+    positions: dict[str, list[int]] = overview["positions"]
+    return positions
 
 
 # --- binding and static files -----------------------------------------------------
@@ -242,7 +244,7 @@ def test_accepts_the_own_origin(studio: Studio) -> None:
 
 def test_get_overview(studio: Studio) -> None:
     project = erdify.load_project(studio.root, strict=True)
-    expected = build_overview(project, load_config(project.settings.pyproject), shown_path=SHOWN)
+    expected = build_diagrams(project, load_config(project.settings.pyproject), shown_path=SHOWN)
     status, headers, body = studio.request("GET", "/api/overview")
     assert (status, headers["Cache-Control"], headers["Content-Type"], _json(body)) == (
         200,
@@ -366,12 +368,12 @@ def _crash(*args: object, **kwargs: object) -> None:
     raise RuntimeError("boom")
 
 
-@pytest.mark.parametrize("target", ["build_overview", "save_overview"])
+@pytest.mark.parametrize("target", ["build_diagrams", "save_overview"])
 def test_an_unexpected_error_is_500_not_a_dropped_connection(
     studio: Studio, monkeypatch: pytest.MonkeyPatch, target: str
 ) -> None:
     monkeypatch.setattr(f"erdify_studio._server.{target}", _crash)
-    if target == "build_overview":
+    if target == "build_diagrams":
         status, _, body = studio.request("GET", "/api/overview")
     else:
         status, _, body = studio.put_layout({"revision": None, "positions": {}})

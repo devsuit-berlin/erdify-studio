@@ -1,6 +1,6 @@
-"""The overview model the canvas draws, and saving its positions.
+"""The diagrams the canvas draws, and saving their positions.
 
-``erdify_studio._overview`` builds the JSON of the studio's HTTP API (the contract
+``erdify_studio._diagrams`` builds the JSON of the studio's HTTP API (the contract
 of the canvas); these tests pin that shape.
 """
 
@@ -13,6 +13,7 @@ import erdify
 import pytest
 
 from erdify_studio import (
+    DEFAULT_GROUP,
     OVERVIEW,
     Layout,
     check_project,
@@ -22,9 +23,15 @@ from erdify_studio import (
     place_project,
     save_layout,
 )
+from erdify_studio._diagrams import (
+    DiagramJson,
+    Diagrams,
+    build_diagrams,
+    layout_revision,
+    save_overview,
+)
 from erdify_studio._errors import LayoutConflictError, PositionsError
-from erdify_studio._overview import Overview, build_overview, layout_revision, save_overview
-from erdify_studio._place import place_inputs
+from erdify_studio._place import name_box_size, place_inputs
 
 MODELS = """\
 import enum
@@ -64,9 +71,12 @@ ENTITIES = ("billing.invoices", "billing.lines", "core.customers")
 ENUM = "enum:Status"
 
 
-def _project(root: Path, models: str = MODELS, erdify_toml: str = "") -> Path:
+def _project(
+    root: Path, models: str = MODELS, erdify_toml: str = "", studio_toml: str = ""
+) -> Path:
     (root / "pyproject.toml").write_text(
-        f'[tool.erdify]\ninclude = ["**/models.py"]\n{erdify_toml}\n[tool.erdify-studio]\n'
+        f'[tool.erdify]\ninclude = ["**/models.py"]\n{erdify_toml}\n'
+        f"[tool.erdify-studio]\n{studio_toml}"
     )
     package = root / "shop"
     package.mkdir(exist_ok=True)
@@ -80,18 +90,30 @@ def _load(root: Path) -> tuple[erdify.Project, Any]:
     return project, load_config(project.settings.pyproject)
 
 
-def _overview(root: Path) -> Overview:
+def _payload(root: Path) -> Diagrams:
     project, config = _load(root)
-    return build_overview(project, config, shown_path="erdify-layout.json")
+    return build_diagrams(project, config, shown_path="erdify-layout.json")
 
 
-def _box(overview: Overview, key: str) -> dict[str, Any]:
-    return dict(next(box for box in overview["boxes"] if box["key"] == key))
+def _diagram(payload: Diagrams, name: str = OVERVIEW) -> DiagramJson:
+    return next(d for d in payload["diagrams"] if d["name"] == name)
+
+
+def _box(payload: Diagrams, key: str) -> dict[str, Any]:
+    return dict(payload["boxes"][key])
 
 
 def _placed(root: Path) -> None:
     project, config = _load(root)
     place_project(project, config)
+
+
+def _layout_with(root: Path, positions: dict[str, dict[str, tuple[int, int]]]) -> None:
+    layout = Layout()
+    for diagram, boxes in positions.items():
+        for key, (x, y) in boxes.items():
+            layout.set_position(diagram, key, x, y)
+    save_layout(layout, root / "erdify-layout.json")
 
 
 # --- boxes ------------------------------------------------------------------------
@@ -101,20 +123,20 @@ def test_boxes_have_place_sizes(tmp_path: Path) -> None:
     root = _project(tmp_path)
     project, _ = _load(root)
     sizes = place_inputs(project)[0]
-    overview = _overview(root)
-    assert {b["key"]: (b["width"], b["height"]) for b in overview["boxes"]} == {
+    payload = _payload(root)
+    assert {k: (b["width"], b["height"]) for k, b in payload["boxes"].items()} == {
         key: sizes[key] for key in (*ENTITIES, ENUM)
     }
 
 
-def test_boxes_are_sorted_by_key(tmp_path: Path) -> None:
-    overview = _overview(_project(tmp_path))
-    assert [b["key"] for b in overview["boxes"]] == sorted([*ENTITIES, ENUM])
+def test_box_definitions_are_sent_once(tmp_path: Path) -> None:
+    payload = _payload(_project(tmp_path))
+    assert sorted(payload["boxes"]) == _diagram(payload)["own"] == sorted([*ENTITIES, ENUM])
 
 
 def test_rows_show_fields(tmp_path: Path) -> None:
-    box = _box(_overview(_project(tmp_path)), "billing.invoices")
-    assert (box["kind"], box["title"]) == ("entity", "billing.invoices")
+    box = _box(_payload(_project(tmp_path)), "billing.invoices")
+    assert (box["kind"], box["title"], box["group"]) == ("entity", "billing.invoices", "billing")
     assert box["rows"][1] == {
         "name": "customer_id",
         "type": "int",
@@ -126,7 +148,7 @@ def test_rows_show_fields(tmp_path: Path) -> None:
 
 
 def test_rows_show_primary_and_unique_keys(tmp_path: Path) -> None:
-    box = _box(_overview(_project(tmp_path)), "core.customers")
+    box = _box(_payload(_project(tmp_path)), "core.customers")
     assert [(r["name"], r["pk"], r["uk"], r["nullable"]) for r in box["rows"]] == [
         ("id", True, False, False),
         ("email", False, True, False),
@@ -134,30 +156,125 @@ def test_rows_show_primary_and_unique_keys(tmp_path: Path) -> None:
 
 
 def test_enum_box_lists_its_values(tmp_path: Path) -> None:
-    box = _box(_overview(_project(tmp_path)), ENUM)
-    assert (box["kind"], box["title"], box["rows"]) == (
+    box = _box(_payload(_project(tmp_path)), ENUM)
+    assert (box["kind"], box["title"], box["group"], box["rows"]) == (
         "enum",
         "Status",
+        None,
         [{"name": "OPEN"}, {"name": "PAID"}],  # erdify draws the member names
     )
 
 
 def test_enum_links_connect_an_enum_to_its_users(tmp_path: Path) -> None:
-    overview = _overview(_project(tmp_path))
-    assert overview["enumLinks"] == [{"enum": ENUM, "entity": "billing.invoices"}]
+    payload = _payload(_project(tmp_path))
+    assert _diagram(payload)["enumLinks"] == [{"enum": ENUM, "entity": "billing.invoices"}]
 
 
 def test_metrics_are_the_place_constants(tmp_path: Path) -> None:
-    overview = _overview(_project(tmp_path))
-    assert overview["metrics"] == {"charWidth": 8, "padding": 32, "header": 32, "row": 22}
+    payload = _payload(_project(tmp_path))
+    assert payload["metrics"] == {"charWidth": 8, "padding": 32, "header": 32, "row": 22}
 
 
 def test_paths_are_passed_for_the_ui_texts(tmp_path: Path) -> None:
-    overview = _overview(_project(tmp_path))
-    assert (overview["layoutPath"], overview["projectPath"]) == (
-        "erdify-layout.json",
-        str(tmp_path),
+    payload = _payload(_project(tmp_path))
+    assert (payload["layoutPath"], payload["projectPath"]) == ("erdify-layout.json", str(tmp_path))
+
+
+@pytest.mark.parametrize("key", ENTITIES)
+def test_every_entity_is_a_box(tmp_path: Path, key: str) -> None:
+    assert _box(_payload(_project(tmp_path)), key)["kind"] == "entity"
+
+
+# --- diagrams ---------------------------------------------------------------------
+
+
+def test_diagram_order_and_labels(tmp_path: Path) -> None:
+    payload = _payload(_project(tmp_path))
+    assert [(d["name"], d["label"]) for d in payload["diagrams"]] == [
+        (OVERVIEW, "Overview"),
+        ("billing", "billing"),
+        ("core", "core"),
+    ]
+
+
+def test_the_default_group_is_last_and_ungrouped(tmp_path: Path) -> None:
+    models = MODELS + (
+        '\n\nclass Audit(SQLModel, table=True):\n    __tablename__ = "audit"\n'
+        "    id: int = Field(primary_key=True)\n"
     )
+    root = _project(tmp_path, models, studio_toml='group_by = "schema"\n')
+    payload = _payload(root)
+    assert [(d["name"], d["label"]) for d in payload["diagrams"]][-1] == (
+        DEFAULT_GROUP,
+        "Ungrouped",
+    )
+    assert payload["boxes"]["audit"]["group"] == DEFAULT_GROUP
+
+
+def test_group_by_none_has_only_the_overview(tmp_path: Path) -> None:
+    payload = _payload(_project(tmp_path, studio_toml='group_by = "none"\n'))
+    assert [d["name"] for d in payload["diagrams"]] == [OVERVIEW]
+    assert {b["group"] for b in payload["boxes"].values()} == {None}
+
+
+def test_a_group_named_overview_is_its_own_diagram(tmp_path: Path) -> None:
+    root = _project(tmp_path, MODELS.replace('"schema": "core"', '"schema": "overview"'))
+    names = [d["name"] for d in _payload(root)["diagrams"]]
+    assert names == [OVERVIEW, "billing", "overview"]
+
+
+def test_group_diagram_content(tmp_path: Path) -> None:
+    payload = _payload(_project(tmp_path))
+    core, billing = _diagram(payload, "core"), _diagram(payload, "billing")
+    assert (core["own"], core["foreign"]) == (["core.customers"], ["billing.invoices"])
+    assert (billing["own"], billing["foreign"]) == (
+        ["billing.invoices", "billing.lines", ENUM],
+        ["core.customers"],
+    )
+    assert _diagram(payload)["foreign"] == []
+
+
+def test_foreign_sizes_are_name_box_sizes(tmp_path: Path) -> None:
+    core = _diagram(_payload(_project(tmp_path)), "core")
+    assert core["foreignSizes"] == {"billing.invoices": list(name_box_size("billing.invoices"))}
+
+
+def test_group_diagram_edges(tmp_path: Path) -> None:
+    payload = _payload(_project(tmp_path))
+    pairs = {
+        name: [(e["from"], e["to"]) for e in _diagram(payload, name)["edges"]]
+        for name in ("core", "billing")
+    }
+    assert pairs["core"] == [("billing.invoices", "core.customers")]
+    assert sorted(pairs["billing"]) == [
+        ("billing.invoices", "core.customers"),
+        ("billing.lines", "billing.invoices"),
+    ]
+
+
+def test_edges_between_foreign_boxes_are_not_drawn(tmp_path: Path) -> None:
+    models = MODELS + (
+        "\n\nclass Audit(SQLModel, table=True):\n"
+        '    __tablename__ = "events"\n'
+        '    __table_args__ = {"schema": "audit"}\n'
+        "    id: int = Field(primary_key=True)\n"
+        '    customer_id: int = Field(foreign_key="core.customers.id")\n'
+        '    invoice_id: int = Field(foreign_key="billing.invoices.id")\n'
+    )
+    audit = _diagram(_payload(_project(tmp_path, models)), "audit")
+    assert audit["foreign"] == ["billing.invoices", "core.customers"]
+    assert sorted((e["from"], e["to"]) for e in audit["edges"]) == [
+        ("audit.events", "billing.invoices"),
+        ("audit.events", "core.customers"),
+    ]
+
+
+def test_enum_links_per_diagram(tmp_path: Path) -> None:
+    payload = _payload(_project(tmp_path))
+    assert _diagram(payload, "core")["enumLinks"] == []
+    assert _diagram(payload, "billing")["enumLinks"] == [
+        {"enum": ENUM, "entity": "billing.invoices"}
+    ]
 
 
 # --- edges ------------------------------------------------------------------------
@@ -167,7 +284,7 @@ def test_edges_use_layout_keys(tmp_path: Path) -> None:
     root = _project(tmp_path)
     project, _ = _load(root)
     source = next(e for e in erdify.diagram_edges(project.entities) if e.label == "customer_id")
-    edge = next(e for e in _overview(root)["edges"] if e["to"] == "core.customers")
+    edge = next(e for e in _diagram(_payload(root))["edges"] if e["to"] == "core.customers")
     assert edge == {
         "from": "billing.invoices",
         "to": "core.customers",
@@ -182,12 +299,12 @@ def test_edges_follow_erdify_order(tmp_path: Path) -> None:
     root = _project(tmp_path)
     project, _ = _load(root)
     labels = [e.label for e in erdify.diagram_edges(project.entities)]
-    assert [e["label"] for e in _overview(root)["edges"]] == labels
+    assert [e["label"] for e in _diagram(_payload(root))["edges"]] == labels
 
 
 def test_no_edges_without_relationships(tmp_path: Path) -> None:
-    overview = _overview(_project(tmp_path, erdify_toml="no_relationships = true\n"))
-    assert overview["edges"] == []
+    payload = _payload(_project(tmp_path, erdify_toml="no_relationships = true\n"))
+    assert [d["edges"] for d in payload["diagrams"]] == [[], [], []]
 
 
 # --- positions and pending changes ------------------------------------------------
@@ -195,43 +312,58 @@ def test_no_edges_without_relationships(tmp_path: Path) -> None:
 
 def test_unplaced_boxes_are_new_at_the_place_positions(tmp_path: Path) -> None:
     root = _project(tmp_path)
-    layout = Layout()
-    layout.set_position(OVERVIEW, "core.customers", 100, 200)
-    save_layout(layout, root / "erdify-layout.json")
-    overview = _overview(root)
+    _layout_with(root, {OVERVIEW: {"core.customers": (100, 200)}})
+    payload = _payload(root)
 
     copy = tmp_path / "copy"
     shutil.copytree(root, copy)
     _placed(copy)
-    expected = load_layout(copy / "erdify-layout.json").diagrams[OVERVIEW]
+    expected = load_layout(copy / "erdify-layout.json")
 
-    assert {b["key"]: ((b["x"], b["y"]), b["new"]) for b in overview["boxes"]} == {
-        key: (expected[key], key != "core.customers") for key in (*ENTITIES, ENUM)
-    }
+    for diagram in payload["diagrams"]:
+        assert diagram["positions"] == {
+            k: list(v) for k, v in expected.diagrams[diagram["name"]].items()
+        }
+    overview = _diagram(payload)
+    assert overview["new"] == sorted(k for k in (*ENTITIES, ENUM) if k != "core.customers")
+    assert _diagram(payload, "core")["new"] == ["billing.invoices", "core.customers"]
 
 
-def test_new_boxes_are_counted_as_placed(tmp_path: Path) -> None:
+def test_positions_are_per_diagram(tmp_path: Path) -> None:
     root = _project(tmp_path)
-    layout = Layout()
-    layout.set_position(OVERVIEW, "core.customers", 100, 200)
-    save_layout(layout, root / "erdify-layout.json")
-    assert _overview(root)["pending"]["placed"] == 3
+    _placed(root)
+    path = root / "erdify-layout.json"
+    layout = load_layout(path)
+    layout.set_position(OVERVIEW, "core.customers", 0, 0)
+    layout.set_position("core", "core.customers", 500, 40)
+    save_layout(layout, path)
+    payload = _payload(root)
+    assert _diagram(payload)["positions"]["core.customers"] == [0, 0]
+    assert _diagram(payload, "core")["positions"]["core.customers"] == [500, 40]
+
+
+def test_new_boxes_are_counted_per_diagram(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    _layout_with(root, {OVERVIEW: {"core.customers": (100, 200)}})
+    # overview 3, billing 4 (3 own + 1 foreign), core 2
+    assert _payload(root)["pending"] == {"placed": 9, "diagrams": 3, "dropped": 0, "created": False}
 
 
 def test_up_to_date_layout_has_nothing_pending(tmp_path: Path) -> None:
     root = _project(tmp_path)
     _placed(root)
-    assert _overview(root)["pending"] == {"placed": 0, "groupChanges": 0, "created": False}
+    assert _payload(root)["pending"] == {"placed": 0, "diagrams": 0, "dropped": 0, "created": False}
 
 
-def test_group_changes_are_counted(tmp_path: Path) -> None:
+def test_stale_entries_and_diagrams_are_counted_as_dropped(tmp_path: Path) -> None:
     root = _project(tmp_path)
     _placed(root)
     path = root / "erdify-layout.json"
     layout = load_layout(path)
     layout.set_position("core", "gone.table", 0, 0)
+    layout.set_position("gone", "core.customers", 0, 0)
     save_layout(layout, path)
-    assert _overview(root)["pending"] == {"placed": 0, "groupChanges": 1, "created": False}
+    assert _payload(root)["pending"] == {"placed": 0, "diagrams": 0, "dropped": 2, "created": False}
 
 
 def test_a_hand_formatted_file_is_not_pending(tmp_path: Path) -> None:
@@ -239,19 +371,20 @@ def test_a_hand_formatted_file_is_not_pending(tmp_path: Path) -> None:
     _placed(root)
     path = root / "erdify-layout.json"
     path.write_text(dumps_layout(load_layout(path)).replace("\n", "\n\n  "))
-    assert _overview(root)["pending"] == {"placed": 0, "groupChanges": 0, "created": False}
+    assert _payload(root)["pending"] == {"placed": 0, "diagrams": 0, "dropped": 0, "created": False}
 
 
 def test_no_layout_file_is_pending_creation(tmp_path: Path) -> None:
-    overview = _overview(_project(tmp_path))
-    assert (overview["pending"]["created"], overview["revision"]) == (True, None)
+    payload = _payload(_project(tmp_path))
+    assert (payload["pending"]["created"], payload["revision"]) == (True, None)
+    assert all(sorted(d["positions"]) == d["new"] for d in payload["diagrams"])
 
 
 def test_revision_is_the_hash_of_the_file(tmp_path: Path) -> None:
     root = _project(tmp_path)
     _placed(root)
     path = root / "erdify-layout.json"
-    assert _overview(root)["revision"] == hashlib.sha256(path.read_bytes()).hexdigest()
+    assert _payload(root)["revision"] == hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def test_layout_revision_of_a_missing_file_is_none(tmp_path: Path) -> None:
@@ -260,25 +393,21 @@ def test_layout_revision_of_a_missing_file_is_none(tmp_path: Path) -> None:
 
 def test_building_does_not_write_the_layout_file(tmp_path: Path) -> None:
     root = _project(tmp_path)
-    _overview(root)
+    _payload(root)
     assert not (root / "erdify-layout.json").exists()
 
 
 def test_empty_project_with_allow_empty(tmp_path: Path) -> None:
-    overview = _overview(_project(tmp_path, models="", erdify_toml="allow_empty = true\n"))
-    assert (overview["boxes"], overview["edges"], overview["enumLinks"]) == ([], [], [])
+    payload = _payload(_project(tmp_path, models="", erdify_toml="allow_empty = true\n"))
+    overview = _diagram(payload)
+    assert (payload["boxes"], overview["edges"], overview["enumLinks"]) == ({}, [], [])
 
 
-def test_check_still_reports_what_the_overview_placed(tmp_path: Path) -> None:
+def test_check_still_reports_what_was_placed_in_the_payload(tmp_path: Path) -> None:
     root = _project(tmp_path)
-    _overview(root)
+    _payload(root)
     project, config = _load(root)
     assert check_project(project, config) is None
-
-
-@pytest.mark.parametrize("key", ENTITIES)
-def test_every_entity_is_a_box(tmp_path: Path, key: str) -> None:
-    assert _box(_overview(_project(tmp_path)), key)["kind"] == "entity"
 
 
 # --- save -------------------------------------------------------------------------
@@ -443,7 +572,7 @@ def test_box_width_fits_each_drawn_row(tmp_path: Path) -> None:
         "    referred_by_id: Optional[int] = Field(default=None, "
         'foreign_key="core.customers.id")\n',
     )
-    overview = _overview(_project(tmp_path, models=long))
+    overview = _payload(_project(tmp_path, models=long))
     char, padding = overview["metrics"]["charWidth"], overview["metrics"]["padding"]
     box = _box(overview, "core.customers")
     widest = max(

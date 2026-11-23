@@ -22,7 +22,7 @@ from erdify_studio import (
     save_layout,
 )
 from erdify_studio._check import DiagramContent
-from erdify_studio._overview import build_overview
+from erdify_studio._diagrams import build_diagrams
 from erdify_studio.cli import main
 
 MODELS = """\
@@ -172,8 +172,8 @@ def test_same_name_classes_in_two_modules_are_separate_entities(tmp_path: Path) 
     assert positions[keys[0]] != positions[keys[1]]
     assert check_project(project, config) == []
     # The canvas shows two boxes, one per class.
-    overview = build_overview(project, config, shown_path="erdify-layout.json")
-    assert [box["key"] for box in overview["boxes"]] == keys
+    overview = build_diagrams(project, config, shown_path="erdify-layout.json")
+    assert list(overview["boxes"]) == keys
 
 
 def test_without_relationships_there_are_no_foreign_boxes(tmp_path: Path) -> None:

@@ -6,7 +6,7 @@ DNS rebinding) and, when it has one, as ``Origin``; the API also needs the rando
 token of the URL the browser was opened with.
 
 Routes: ``GET /`` and ``GET /assets/*`` (the built frontend), ``GET /api/overview``
-(``build_overview``) and ``PUT /api/layout`` (``save_overview``).
+(``build_diagrams``) and ``PUT /api/layout`` (``save_overview``).
 
 The project is loaded again for every API request, so a reload after a ``git
 checkout`` or a model change shows the current models instead of treating their
@@ -30,8 +30,8 @@ import erdify
 from erdify import Project
 
 from erdify_studio._config import StudioConfig
+from erdify_studio._diagrams import build_diagrams, save_overview
 from erdify_studio._errors import LayoutConflictError, PositionsError, StudioError
-from erdify_studio._overview import build_overview, save_overview
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +207,7 @@ class _Handler(BaseHTTPRequestHandler):
     def _overview(self) -> None:
         try:
             project, config = self.server.load()
-            overview = build_overview(project, config, shown_path=self.server.shown_path)
+            overview = build_diagrams(project, config, shown_path=self.server.shown_path)
         except _LOAD_ERRORS as e:
             self._error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
             return

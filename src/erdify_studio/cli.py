@@ -15,8 +15,8 @@ import erdify
 from erdify_studio import __version__, _server
 from erdify_studio._check import check_project
 from erdify_studio._config import StudioConfig, load_config
+from erdify_studio._diagrams import build_diagrams
 from erdify_studio._errors import StudioError
-from erdify_studio._overview import build_overview
 from erdify_studio._place import place_project
 
 #: Exit code of a failed check (out-of-date layout).
@@ -200,7 +200,7 @@ def _open(path: Path, *, port: int, browser: bool) -> int:
     project, config = _load(path)
     shown = _display(config.layout)
     # Fail before serving, like `check`: no entities, an unreadable layout file.
-    build_overview(project, config, shown_path=shown)
+    build_diagrams(project, config, shown_path=shown)
     server = _server.start_server(lambda: _load(path), port=port, shown_path=shown)
     try:
         print(f"erdify-studio: serving {server.url} (Ctrl+C to stop)", flush=True)
