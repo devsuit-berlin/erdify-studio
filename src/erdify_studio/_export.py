@@ -9,6 +9,7 @@ layout (``check_project`` without problems).
 
 from __future__ import annotations
 
+import logging
 import re
 import unicodedata
 from collections.abc import Iterable
@@ -24,6 +25,8 @@ from erdify_studio._diagrams import Diagrams, _checked, build_diagrams
 from erdify_studio._errors import ExportError, LayoutConflictError, LayoutError, PositionsError
 from erdify_studio._layout import DEFAULT_GROUP, OVERVIEW, Layout
 from erdify_studio._svg import render_svg
+
+logger = logging.getLogger(__name__)
 
 _OVERVIEW_FILE = PurePosixPath("overview.svg")
 _GROUPS = PurePosixPath("groups")
@@ -62,7 +65,7 @@ class SvgProblem:
     def message(self, shown: str) -> str:
         """One ``check`` line, with the path as the user sees it (``shown``)."""
         what = {"missing": "is missing", "outdated": "is out of date", "stale": "is stale"}
-        return f"export {shown!r} {what[self.kind]}"
+        return f"export {Path(shown).as_posix()!r} {what[self.kind]}"
 
 
 def slug(name: str) -> str:
@@ -126,7 +129,7 @@ def export_project(project: Project, config: StudioConfig) -> ExportResult:
     written: list[PurePosixPath] = []
     for relative, text in sorted(files.items()):
         path = directory / relative
-        if _read(path) != text:
+        if _read(path) != text.encode():
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text, encoding="utf-8", newline="\n")
             written.append(relative)
@@ -149,7 +152,7 @@ def check_exports(project: Project, config: StudioConfig) -> list[SvgProblem]:
         current = _read(directory / relative)
         if current is None:
             problems.append(SvgProblem(directory / relative, "missing"))
-        elif current != text:
+        elif current != text.encode():
             problems.append(SvgProblem(directory / relative, "outdated"))
     problems += [SvgProblem(directory / r, "stale") for r in _stale(directory, files)]
     return sorted(problems, key=lambda p: p.path.as_posix())
@@ -160,7 +163,8 @@ def build_studio(project: Project, config: StudioConfig, *, shown_path: str) -> 
 
     ``pending.svgs`` counts the SVGs ``check`` would report; it stays 0 without
     ``export_dir``, while the layout file is out of date (Save fixes both at once), and
-    when two groups would share a file (Save reports that). ``exportPath`` is
+    when two groups would share a file or ``export_dir`` can't be read (Save and
+    ``export`` report those). ``exportPath`` is
     ``export_dir`` as the UI shows it.
     """
     payload = build_diagrams(project, config, shown_path=shown_path)
@@ -169,8 +173,9 @@ def build_studio(project: Project, config: StudioConfig, *, shown_path: str) -> 
     payload["exportPath"] = _shown(config.export_dir)
     try:
         payload["pending"]["svgs"] = len(check_exports(project, config))
-    except ExportError:
-        pass
+    except (ExportError, OSError) as e:
+        # Studio must still open; Save and `export` report the problem.
+        logger.info(f"cannot compare the SVGs in {str(config.export_dir)!r}: {e}")
     return payload
 
 
@@ -208,10 +213,11 @@ def render_download(
 
 
 def _shown(path: Path) -> str:
+    """``path`` relative to the working directory when inside it, with ``/`` (as committed)."""
     try:
-        return str(path.relative_to(Path.cwd()))
+        return path.relative_to(Path.cwd()).as_posix()
     except ValueError:
-        return str(path)
+        return path.as_posix()
 
 
 def _export_dir(config: StudioConfig) -> Path:
@@ -220,15 +226,15 @@ def _export_dir(config: StudioConfig) -> Path:
     return config.export_dir
 
 
-def _read(path: Path) -> str | None:
-    """The file's text with ``\n`` line endings; None when it doesn't exist.
+def _read(path: Path) -> bytes | None:
+    """The file's bytes with ``\n`` line endings; None when it doesn't exist.
 
-    git with ``core.autocrlf`` (the default on Windows runners) checks the SVGs out
-    with CRLF; they are still current.
+    Bytes, not text: a file that isn't UTF-8 is simply different, not an error. git
+    with ``core.autocrlf`` (the default on Windows runners) checks the SVGs out with
+    CRLF; they are still current.
     """
     try:
-        with path.open(encoding="utf-8", newline="") as file:
-            return file.read().replace("\r\n", "\n")
+        return path.read_bytes().replace(b"\r\n", b"\n")
     except FileNotFoundError:
         return None
 

@@ -27,7 +27,15 @@ const moved = ref<Set<string>>(new Set());
 const edits: Record<string, number> = {};
 const saving = ref(false);
 
-const dirty = computed(() => pendingShown.value || moved.value.size > 0);
+// Only outdated SVGs: Save fixes them, but nothing was edited — no "Unsaved changes"
+// badge, no prompt on leaving.
+const pendingLayout = computed(() => {
+  const pending = loaded.value?.pending;
+  return !!pending && pendingShown.value && (pending.created || pending.placed > 0 || pending.dropped > 0);
+});
+const svgsOnly = computed(() => (loaded.value?.pending.svgs ?? 0) > 0 && !pendingLayout.value);
+const dirty = computed(() => pendingLayout.value || moved.value.size > 0);
+const saveable = computed(() => dirty.value || (pendingShown.value && svgsOnly.value));
 
 const diagram = computed<DiagramJson | null>(
   () => loaded.value?.diagrams.find((d) => d.name === current.value) ?? null,
@@ -106,7 +114,7 @@ function onMove(key: string, position: Position): void {
 }
 
 async function save(): Promise<void> {
-  if (!loaded.value || saving.value || !dirty.value) return;
+  if (!loaded.value || saving.value || !saveable.value) return;
   saving.value = true;
   const editsAtSave = { ...edits };
   try {
@@ -207,7 +215,7 @@ onBeforeUnmount(() => {
 <template>
   <UApp>
     <div class="flex h-screen flex-col">
-      <StudioToolbar :title="diagram?.label ?? 'Overview'" :dirty="dirty" :saving="saving" @save="save" @download="download" />
+      <StudioToolbar :title="diagram?.label ?? 'Overview'" :dirty="dirty" :saveable="saveable" :saving="saving" @save="save" @download="download" />
       <UAlert v-if="banner" :title="banner" color="primary" variant="subtle" icon="i-lucide-sparkles" class="rounded-none" />
       <div class="flex min-h-0 flex-1">
         <DiagramList

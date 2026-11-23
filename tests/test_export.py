@@ -57,7 +57,7 @@ def _project(
     package = root / "shop"
     package.mkdir(exist_ok=True)
     (package / "__init__.py").write_text("")
-    (package / "models.py").write_text(models)
+    (package / "models.py").write_text(models, encoding="utf-8")
     if place:
         project, config = _load(root)
         place_project(project, config)
@@ -480,3 +480,19 @@ def test_download_refuses_bad_positions(tmp_path: Path) -> None:
     core = next(d for d in payload["diagrams"] if d["name"] == "core")
     with pytest.raises(PositionsError):
         render_download(project, config, "core", {**core["positions"], "core.customers": [True, 0]})
+
+
+def test_a_non_utf8_svg_is_outdated_not_a_crash(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    _export(root)
+    (root / "docs" / "erd" / "overview.svg").write_bytes(b"\xff\xfe<\x00s\x00")  # UTF-16
+    out = root / "docs" / "erd"
+    assert _check(root) == [SvgProblem(out / "overview.svg", "outdated")]
+    assert _export(root).written == (PurePosixPath("overview.svg"),)
+
+
+def test_studio_loads_when_export_dir_is_a_file(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    (root / "docs").mkdir()
+    (root / "docs" / "erd").write_text("not a folder")
+    assert _studio(root)["pending"]["svgs"] == 0

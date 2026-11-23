@@ -205,11 +205,11 @@ def _export(path: Path) -> int:
     directory = config.export_dir
     assert directory is not None  # export_project raised otherwise
     for relative in result.written:
-        print(f"{_display(directory / relative)}: wrote")
+        print(f"{Path(_display(directory / relative)).as_posix()}: wrote")
     for relative in result.deleted:
-        print(f"{_display(directory / relative)}: deleted")
+        print(f"{Path(_display(directory / relative)).as_posix()}: deleted")
     if not result.written and not result.deleted:
-        print(f"{_display(directory)}: SVGs up to date")
+        print(f"{Path(_display(directory)).as_posix()}: SVGs up to date")
     return 0
 
 

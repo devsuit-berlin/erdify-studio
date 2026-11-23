@@ -516,3 +516,11 @@ def test_writes_from_a_foreign_host_are_refused(studio: Studio, method: str, pat
 
 def test_get_of_the_layout_route_is_405(studio: Studio) -> None:
     assert studio.request("GET", "/api/layout")[0] == 405
+
+
+def test_a_save_whose_export_breaks_still_answers_200(exporting: Studio) -> None:
+    (exporting.root / "erd").write_text("not a folder")  # export_dir is a file
+    status, _, body = exporting.put_layout({"revision": None, "diagrams": _diagrams(exporting)})
+    result = _json(body)
+    assert (status, "exportError" in result) == (200, True)
+    assert result["revision"] == layout_revision(exporting.root / SHOWN)

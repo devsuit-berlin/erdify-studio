@@ -174,7 +174,10 @@ export async function downloadSvg(
   const link = document.createElement("a");
   link.href = url;
   link.download = name;
+  document.body.append(link);
   link.click();
-  URL.revokeObjectURL(url);
+  link.remove();
+  // Some browsers start the download asynchronously: revoke only afterwards.
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
   return { ok: true };
 }

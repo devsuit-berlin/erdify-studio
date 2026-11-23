@@ -81,7 +81,7 @@ def _project(root: Path, models: str = MODELS) -> Path:
     package = root / "shop"
     package.mkdir()
     (package / "__init__.py").write_text("")
-    (package / "models.py").write_text(models)
+    (package / "models.py").write_text(models, encoding="utf-8")
     layout = Layout()
     for diagram, boxes in POSITIONS.items():
         for key, (x, y) in boxes.items():

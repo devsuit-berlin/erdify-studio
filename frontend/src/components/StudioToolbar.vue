@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{ title: string; dirty: boolean; saving: boolean }>();
+defineProps<{ title: string; dirty: boolean; saveable: boolean; saving: boolean }>();
 defineEmits<{ save: []; download: [] }>();
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -21,7 +21,7 @@ const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
       icon="i-lucide-save"
       :label="`Save  ${isMac ? '⌘S' : 'Ctrl+S'}`"
       :loading="saving"
-      :disabled="!dirty || saving"
+      :disabled="!saveable || saving"
       @click="$emit('save')"
     />
   </header>
