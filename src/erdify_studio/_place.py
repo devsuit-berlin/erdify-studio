@@ -172,7 +172,7 @@ def place_layout(
         def size(key: str, own: frozenset[str] = own) -> _Size:
             if key in own:
                 return sizes[key]
-            return _box(key, ())  # a foreign box shows the name only
+            return name_box_size(key)  # a foreign box shows the name only
 
         def related(key: str, own: frozenset[str] = own, shown: frozenset[str] = shown) -> set[str]:
             # A foreign box belongs next to the own boxes it is connected with.
@@ -322,6 +322,11 @@ def _entity_box(key: str, entity: EntityInfo) -> _Size:
             for f in entity.fields
         ],
     )
+
+
+def name_box_size(key: str) -> _Size:
+    """Size of a box that shows its name only (a foreign box), as ``(width, height)``."""
+    return _box(key, ())
 
 
 def _box(title: str, rows: Collection[str]) -> _Size:

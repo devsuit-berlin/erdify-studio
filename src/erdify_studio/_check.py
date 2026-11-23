@@ -38,6 +38,19 @@ class DiagramContent:
         """Every key the diagram shows."""
         return self.entities | self.foreign | self.enums
 
+    def shows_edge(self, a: str, b: str) -> bool:
+        """Whether the diagram draws an edge between the keys ``a`` and ``b``.
+
+        Both must be shown and at least one must be an own entity: an edge between
+        two foreign boxes belongs to another group. The overview draws every edge.
+        """
+        shown = self.shown
+        return a in shown and b in shown and (a in self.entities or b in self.entities)
+
+    def shows_enum_link(self, enum: str, entity: str) -> bool:
+        """Whether the diagram links the enum ``enum`` to the own entity ``entity``."""
+        return enum in self.enums and entity in self.entities
+
 
 @dataclass(frozen=True)
 class Problem:
