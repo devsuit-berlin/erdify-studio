@@ -776,3 +776,13 @@ def test_changed_models_conflict_with_reason_models(studio: Studio) -> None:
     assert (status, _json(body)["reason"]) == (409, "models")
     status, _, body = _post_svg(studio, {"diagram": "gone", "positions": {}})
     assert (status, _json(body)["reason"]) == (409, "models")
+
+
+def test_a_lasting_unexpected_error_is_logged_once(
+    studio: Studio, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(studio.server, "load", _crash)
+    with caplog.at_level("INFO", logger="erdify_studio._server"):
+        for _ in range(3):
+            studio.server.refresh()
+    assert sum("cannot load the project" in r.message for r in caplog.records) == 1

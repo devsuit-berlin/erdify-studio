@@ -7,6 +7,7 @@ import {
   fetchStatus,
   mergeDiagrams,
   saveLayout,
+  Unreachable,
   type AllPositions,
   type DiagramJson,
   type Diagrams,
@@ -190,9 +191,16 @@ async function poll(): Promise<void> {
         mergeIssue.value = error instanceof Error ? error.message : String(error);
       }
     }
-  } catch {
-    failedPolls += 1;
-    serverGone.value = failedPolls >= 3;
+  } catch (error) {
+    if (error instanceof Unreachable) {
+      failedPolls += 1;
+      serverGone.value = failedPolls >= 3;
+    } else {
+      // The server answered with an error (e.g. an unreadable layout file).
+      failedPolls = 0;
+      serverGone.value = false;
+      loadIssue.value = error instanceof Error ? error.message : String(error);
+    }
   } finally {
     polling = false;
   }

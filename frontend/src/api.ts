@@ -136,8 +136,16 @@ async function errorMessage(response: Response): Promise<string> {
   return (await errorBody(response)).message;
 }
 
+/** Thrown when the server can't be reached at all (not for an error response). */
+export class Unreachable extends Error {}
+
 export async function fetchStatus(): Promise<Status> {
-  const response = await fetch("api/status", { headers: { "X-Studio-Token": token } });
+  let response: Response;
+  try {
+    response = await fetch("api/status", { headers: { "X-Studio-Token": token } });
+  } catch {
+    throw new Unreachable("erdify-studio is not running any more");
+  }
   if (!response.ok) {
     throw new Error(await errorMessage(response));
   }

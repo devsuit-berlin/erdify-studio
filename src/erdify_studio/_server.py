@@ -150,11 +150,11 @@ class StudioServer(ThreadingHTTPServer):
             project, config = self.load()
             fingerprint = model_fingerprint(project, config)
         except _LOAD_ERRORS as e:
-            logger.info(f"cannot load the project, showing the last good state: {e}")
-            self._fail(str(e))
+            if self._fail(str(e)):
+                logger.info(f"cannot load the project, showing the last good state: {e}")
         except Exception:
-            logger.exception("cannot load the project, showing the last good state")
-            self._fail("internal error (see the terminal)")
+            if self._fail("internal error (see the terminal)"):
+                logger.exception("cannot load the project, showing the last good state")
         else:
             with self._snapshot_lock:
                 self._snapshot = Snapshot(project, config, fingerprint)
@@ -187,10 +187,16 @@ class StudioServer(ThreadingHTTPServer):
             self._watcher.join()
             self._watcher = None
 
-    def _fail(self, error: str) -> None:
-        """Keep the last good project, record why the newest load failed."""
+    def _fail(self, error: str) -> bool:
+        """Keep the last good project, record why the newest load failed.
+
+        Returns whether the error is new (the watcher logs each error once, not on
+        every tick while it lasts).
+        """
         with self._snapshot_lock:
+            new = self._snapshot.error != error
             self._snapshot = replace(self._snapshot, error=error)
+        return new
 
 
 def start_server(

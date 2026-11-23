@@ -698,3 +698,25 @@ def test_positions_beyond_the_coordinate_limit_are_refused(tmp_path: Path) -> No
     project, config = _load(root)
     with pytest.raises(PositionsError):
         render_download(project, config, OVERVIEW, screen[OVERVIEW])
+
+
+def test_merge_keeps_a_resized_box_in_place(tmp_path: Path) -> None:
+    """AC 4: when columns change, the box keeps its (on-screen) position."""
+    root = _project(tmp_path, studio="")
+    screen = _on_screen(root)
+    screen[OVERVIEW]["core.customers"] = [900, 900]
+    screen["core"]["core.customers"] = [300, 40]
+    (root / "shop" / "models.py").write_text(
+        MODELS.replace(
+            "    id: int = Field(primary_key=True)\n\n\nclass Invoice",
+            "    id: int = Field(primary_key=True)\n    email: str\n    phone: str\n"
+            "\n\nclass Invoice",
+        )
+    )
+    merged = _merge(root, screen)
+    for name, where in ((OVERVIEW, [900, 900]), ("core", [300, 40])):
+        diagram = _diagram_of(merged, name)
+        assert diagram["positions"]["core.customers"] == where
+        assert "core.customers" not in diagram["new"]
+    rows = merged["boxes"]["core.customers"]["rows"]
+    assert [r["name"] for r in rows] == ["id", "email", "phone"]
