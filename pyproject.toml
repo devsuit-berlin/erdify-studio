@@ -80,7 +80,7 @@ show_missing = true
 python_version = "3.11"
 strict = true
 # scripts/check_instructions.py is vendored and kept as shipped.
-files = ["src", "tests", "scripts/check_wheel.py"]
+files = ["src", "tests", "scripts/check_wheel.py", "scripts/check_geometry.py"]
 
 [tool.ruff]
 line-length = 100

@@ -93,13 +93,15 @@ class Pending(TypedDict):
 
     ``placed``: boxes placed automatically, over all diagrams. ``diagrams``: how many
     diagrams have such boxes. ``dropped``: stale entries plus stale diagrams.
-    ``created``: there is no layout file yet.
+    ``created``: there is no layout file yet. ``svgs``: exported SVGs that are missing,
+    out of date or stale (``_export.build_studio`` fills it; 0 here).
     """
 
     placed: int
     diagrams: int
     dropped: int
     created: bool
+    svgs: int
 
 
 class DiagramJson(TypedDict):
@@ -131,6 +133,7 @@ class Diagrams(TypedDict):
     pending: Pending
     layoutPath: str
     projectPath: str
+    exportPath: str | None
 
 
 #: Labels of the diagrams that aren't named after a group.
@@ -223,6 +226,7 @@ def build_diagrams(project: Project, config: StudioConfig, *, shown_path: str) -
         "pending": _pending(result),
         "layoutPath": shown_path,
         "projectPath": str(project.settings.input),
+        "exportPath": None,
     }
 
 
@@ -267,7 +271,7 @@ def save_diagrams(
     layout = Layout()
     for name, content in contents.items():
         layout.add_diagram(name)
-        for key, (x, y) in _checked(diagrams[name], content.shown).items():
+        for key, (x, y) in checked_positions(diagrams[name], content.shown).items():
             try:
                 layout.set_position(name, key, x, y)
             except LayoutError as e:
@@ -278,7 +282,7 @@ def save_diagrams(
     return layout_revision(config.layout)
 
 
-def _checked(positions: object, shown: frozenset[str]) -> dict[str, tuple[float, float]]:
+def checked_positions(positions: object, shown: frozenset[str]) -> dict[str, tuple[float, float]]:
     """``positions`` narrowed to key -> ``(x, y)`` numbers, with exactly the ``shown`` keys."""
     if not isinstance(positions, Mapping):
         raise PositionsError(f"positions must be an object, got {type(positions).__name__!r}")
@@ -392,4 +396,5 @@ def _pending(result: PlaceResult) -> Pending:
         "diagrams": len({diagram for diagram, _ in result.placed}),
         "dropped": len(result.removed) + len(result.removed_diagrams),
         "created": result.created,
+        "svgs": 0,
     }

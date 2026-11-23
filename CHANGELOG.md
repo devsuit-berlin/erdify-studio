@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `erdify-studio export [path]`: writes every diagram as SVG to
+  `[tool.erdify-studio] export_dir` — `overview.svg` and `groups/<group>.svg` — in
+  studio's light theme on a white background, byte-identical on every machine. Stale
+  `groups/*.svg` are deleted, nothing else in `export_dir` is touched; two groups that
+  would share a file are an error. Exits 1 while the layout file is out of date.
+- With `export_dir` set, `check` also reports missing, outdated and stale SVGs, and
+  Save in studio writes them; studio shows when they are out of date, and a failed
+  export after a save is reported without losing the saved layout.
+- **Download SVG** in studio's toolbar: the open diagram as SVG with the positions on
+  screen, without `export_dir` and without writing a file (`POST /api/svg`).
 - Group diagrams in the canvas: a list switches between the overview and one diagram
   per group. A group diagram shows its entities, the enums they use and greyed-out,
   name-only foreign boxes for connected entities of other groups; clicking one opens

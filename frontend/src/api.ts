@@ -55,6 +55,8 @@ export interface Pending {
   diagrams: number;
   dropped: number;
   created: boolean;
+  // Exported SVGs that are missing, out of date or stale (0 without export_dir).
+  svgs: number;
 }
 
 export type Position = [number, number];
@@ -79,6 +81,8 @@ export interface Diagrams {
   pending: Pending;
   layoutPath: string;
   projectPath: string;
+  // export_dir as the UI shows it; null when nothing is exported.
+  exportPath: string | null;
 }
 
 /** A box as one diagram draws it: a foreign box shows its title only. */
@@ -103,7 +107,7 @@ export interface View {
 export type AllPositions = Record<string, Record<string, Position>>;
 
 export type SaveOutcome =
-  | { ok: true; saved: string; revision: string }
+  | { ok: true; saved: string; revision: string; exported?: number; exportError?: string }
   | { ok: false; conflict: boolean; message: string };
 
 // The server opens the page as /?token=…; every API call must send it back.
@@ -145,4 +149,35 @@ export async function saveLayout(
     return { ok: true, ...body };
   }
   return { ok: false, conflict: response.status === 409, message: await errorMessage(response) };
+}
+
+/** Download one diagram as SVG, drawn by the server with the positions the page shows. */
+export async function downloadSvg(
+  diagram: string,
+  positions: Record<string, Position>,
+): Promise<{ ok: true } | { ok: false; conflict: boolean; message: string }> {
+  let response: Response;
+  try {
+    response = await fetch("api/svg", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Studio-Token": token },
+      body: JSON.stringify({ diagram, positions }),
+    });
+  } catch {
+    return { ok: false, conflict: false, message: "erdify-studio is not running any more" };
+  }
+  if (!response.ok) {
+    return { ok: false, conflict: response.status === 409, message: await errorMessage(response) };
+  }
+  const name = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "")?.[1] ?? "diagram.svg";
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  // Some browsers start the download asynchronously: revoke only afterwards.
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  return { ok: true };
 }

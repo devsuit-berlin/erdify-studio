@@ -31,3 +31,7 @@ class PositionsError(StudioError):
 
 class LayoutConflictError(LayoutError):
     """The layout file changed since the positions to save were read from it."""
+
+
+class ExportError(StudioError):
+    """SVGs that cannot be exported: no ``export_dir``, or two groups sharing a file name."""

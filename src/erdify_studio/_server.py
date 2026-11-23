@@ -6,7 +6,8 @@ DNS rebinding) and, when it has one, as ``Origin``; the API also needs the rando
 token of the URL the browser was opened with.
 
 Routes: ``GET /`` and ``GET /assets/*`` (the built frontend), ``GET /api/diagrams``
-(``build_diagrams``) and ``PUT /api/layout`` (``save_diagrams``).
+(``build_studio``), ``PUT /api/layout`` (``save_diagrams``, then the SVG export) and
+``POST /api/svg`` (``render_download``: one diagram as an SVG download).
 
 The project is loaded again for every API request, so a reload after a ``git
 checkout`` or a model change shows the current models instead of treating their
@@ -30,8 +31,9 @@ import erdify
 from erdify import Project
 
 from erdify_studio._config import StudioConfig
-from erdify_studio._diagrams import build_diagrams, save_diagrams
+from erdify_studio._diagrams import save_diagrams
 from erdify_studio._errors import LayoutConflictError, PositionsError, StudioError
+from erdify_studio._export import build_studio, export_project, render_download
 
 logger = logging.getLogger(__name__)
 
@@ -150,11 +152,19 @@ class _Handler(BaseHTTPRequestHandler):
         elif self._authorized():
             self._save()
 
+    def do_POST(self) -> None:
+        if not self._trusted():
+            return
+        if self.path.split("?", 1)[0] != "/api/svg":
+            self._error(HTTPStatus.METHOD_NOT_ALLOWED, "method not allowed")
+        elif self._authorized():
+            self._svg()
+
     def _not_allowed(self) -> None:
         if self._trusted():
             self._error(HTTPStatus.METHOD_NOT_ALLOWED, "method not allowed")
 
-    do_POST = do_DELETE = do_PATCH = _not_allowed
+    do_DELETE = do_PATCH = _not_allowed
 
     # --- guards -------------------------------------------------------------------
 
@@ -207,7 +217,7 @@ class _Handler(BaseHTTPRequestHandler):
     def _diagrams(self) -> None:
         try:
             project, config = self.server.load()
-            diagrams = build_diagrams(project, config, shown_path=self.server.shown_path)
+            diagrams = build_studio(project, config, shown_path=self.server.shown_path)
         except _LOAD_ERRORS as e:
             self._error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
             return
@@ -220,10 +230,23 @@ class _Handler(BaseHTTPRequestHandler):
         payload = self._body()
         if payload is None:
             return
+        if (
+            not isinstance(payload.get("revision", 0), str | None)
+            or not {
+                "revision",
+                "diagrams",
+            }
+            <= payload.keys()
+        ):
+            self._error(
+                HTTPStatus.BAD_REQUEST, 'expected {"revision": string or null, "diagrams": {...}}'
+            )
+            return
         try:
             with self.server.save_lock:
                 project, config = self.server.load()
                 revision = save_diagrams(project, config, payload["diagrams"], payload["revision"])
+                exported = self._export(project, config)
         except PositionsError as e:
             self._error(HTTPStatus.BAD_REQUEST, str(e))
         except LayoutConflictError as e:
@@ -233,10 +256,61 @@ class _Handler(BaseHTTPRequestHandler):
         except Exception:
             self._internal_error()
         else:
-            self._json(HTTPStatus.OK, {"saved": self.server.shown_path, "revision": revision})
+            self._json(
+                HTTPStatus.OK, {"saved": self.server.shown_path, "revision": revision, **exported}
+            )
+
+    def _svg(self) -> None:
+        """One diagram as SVG with the positions the page shows, as a download."""
+        payload = self._body()
+        if payload is None:
+            return
+        if not isinstance(payload.get("diagram"), str) or "positions" not in payload:
+            self._error(HTTPStatus.BAD_REQUEST, 'expected {"diagram": string, "positions": {...}}')
+            return
+        try:
+            project, config = self.server.load()
+            name, svg = render_download(project, config, payload["diagram"], payload["positions"])
+        except PositionsError as e:
+            self._error(HTTPStatus.BAD_REQUEST, str(e))
+            return
+        except LayoutConflictError as e:
+            self._error(HTTPStatus.CONFLICT, str(e))
+            return
+        except _LOAD_ERRORS as e:
+            self._error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
+            return
+        except Exception:
+            self._internal_error()
+            return
+        body = svg.encode()
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "image/svg+xml; charset=utf-8")
+        self.send_header("Content-Disposition", f'attachment; filename="{name}"')
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _export(self, project: Project, config: StudioConfig) -> dict[str, int | str]:
+        """Export the SVGs after a save: ``exported`` (files written or deleted) or
+        ``exportError``. The layout is saved either way, so a failure is not an error
+        response: the page must still take the new revision."""
+        if config.export_dir is None:
+            return {}
+        try:
+            result = export_project(project, config)
+        except (StudioError, OSError) as e:
+            logger.info(f"SVG export after save failed: {e}")
+            return {"exportError": str(e)}
+        except Exception:
+            # A bug, but the layout is saved: the page must still take the new revision.
+            logger.exception("SVG export after save failed")
+            return {"exportError": "internal error (see the terminal)"}
+        return {"exported": len(result.written) + len(result.deleted)}
 
     def _body(self) -> dict[str, Any] | None:
-        """The JSON object of a save request; None after an error response."""
+        """The JSON object of a request body; None after an error response."""
         content_type = self.headers.get("Content-Type", "").split(";")[0].strip()
         if content_type != "application/json":
             self._error(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "expected application/json")
@@ -253,16 +327,8 @@ class _Handler(BaseHTTPRequestHandler):
         except (ValueError, RecursionError) as e:
             self._error(HTTPStatus.BAD_REQUEST, f"invalid JSON: {e}")
             return None
-        if (
-            not isinstance(payload, dict)
-            or "diagrams" not in payload
-            or not isinstance(payload.get("revision", 0), str | None)
-            or "revision" not in payload
-        ):
-            self._error(
-                HTTPStatus.BAD_REQUEST,
-                'expected {"revision": string or null, "diagrams": {...}}',
-            )
+        if not isinstance(payload, dict):
+            self._error(HTTPStatus.BAD_REQUEST, "expected a JSON object")
             return None
         return payload
 

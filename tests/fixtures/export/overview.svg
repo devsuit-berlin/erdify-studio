@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-40 -40 1120 416" width="1120" height="416">
+  <rect x="-40" y="-40" width="1120" height="416" fill="#ffffff"/>
+  <g class="enum-link">
+    <path d="M 840 70.96 L 636 56.6" fill="none" stroke="#62748e" stroke-width="1.25" stroke-dasharray="4 4"/>
+  </g>
+  <g class="edge">
+    <title>referred_by_id</title>
+    <path d="M 240 35 C 296 16.33, 296 81.67, 240 63" fill="none" stroke="#62748e" stroke-width="1.25"/>
+    <path d="M 252 35 L 240 28 M 252 35 L 240 42" fill="none" stroke="#62748e" stroke-width="1.25"/>
+    <path d="M 264 35 a 4 4 0 1 0 -8 0 a 4 4 0 1 0 8 0" fill="#f8fafc" stroke="#62748e" stroke-width="1.25"/>
+    <path d="M 246 56 L 246 70" fill="none" stroke="#62748e" stroke-width="1.25"/>
+    <path d="M 264 63 a 4 4 0 1 0 -8 0 a 4 4 0 1 0 8 0" fill="#f8fafc" stroke="#62748e" stroke-width="1.25"/>
+  </g>
+  <g class="edge">
+    <title>customer_id</title>
+    <path d="M 420 49 L 240 49" fill="none" stroke="#62748e" stroke-width="1.25"/>
+    <path d="M 408 49 L 420 56 M 408 49 L 420 42" fill="none" stroke="#62748e" stroke-width="1.25"/>
+    <path d="M 404 49 a 4 4 0 1 0 -8 0 a 4 4 0 1 0 8 0" fill="#f8fafc" stroke="#62748e" stroke-width="1.25"/>
+    <path d="M 246 42 L 246 56" fill="none" stroke="#62748e" stroke-width="1.25"/>
+    <path d="M 264 49 a 4 4 0 1 0 -8 0 a 4 4 0 1 0 8 0" fill="#f8fafc" stroke="#62748e" stroke-width="1.25"/>
+  </g>
+  <g class="edge">
+    <title>invoice_id</title>
+    <path d="M 521.22 260 L 526.43 98" fill="none" stroke="#62748e" stroke-width="1.25"/>
+    <path d="M 521.61 248.01 L 514.22 259.78 M 521.61 248.01 L 528.22 260.22" fill="none" stroke="#62748e" stroke-width="1.25"/>
+    <path d="M 525.86 240.01 a 4 4 0 1 0 -8 0 a 4 4 0 1 0 8 0" fill="#f8fafc" stroke="#62748e" stroke-width="1.25"/>
+    <path d="M 533.23 104.22 L 519.24 103.77 M 532.84 116.22 L 518.85 115.77" fill="none" stroke="#62748e" stroke-width="1.25"/>
+  </g>
+  <g transform="translate(420 0)" data-key="billing.invoices" font-family='"JetBrains Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace' font-size="13.33">
+    <clipPath id="clip-_overview-0"><rect width="216" height="98" rx="6"/></clipPath>
+    <rect width="216" height="98" rx="6" fill="#ffffff"/>
+    <g clip-path="url(#clip-_overview-0)">
+      <rect width="216" height="32" fill="#e2e8f0"/>
+      <text x="16" y="20.67" font-weight="700" fill="#0f172b">billing.invoices</text>
+      <text x="16" y="47.67" font-weight="700" fill="#615fff">PK</text>
+      <text x="64" y="47.67" fill="#0f172b">id</text>
+      <text x="200" y="47.67" text-anchor="end" fill="#62748e">int</text>
+      <line x1="0" x2="216" y1="54" y2="54" stroke="#e2e8f0"/>
+      <text x="16" y="69.67" font-weight="700" fill="#615fff">FK</text>
+      <text x="64" y="69.67" fill="#0f172b">customer_id</text>
+      <text x="200" y="69.67" text-anchor="end" fill="#62748e">int?</text>
+      <line x1="0" x2="216" y1="76" y2="76" stroke="#e2e8f0"/>
+      <text x="16" y="91.67" font-weight="700" fill="#615fff"></text>
+      <text x="64" y="91.67" fill="#0f172b">status</text>
+      <text x="200" y="91.67" text-anchor="end" fill="#62748e">Status</text>
+    </g>
+    <rect width="216" height="98" rx="6" fill="none" stroke="#cad5e2" stroke-width="1"/>
+  </g>
+  <g transform="translate(420 260)" data-key="billing.lines" font-family='"JetBrains Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace' font-size="13.33">
+    <clipPath id="clip-_overview-1"><rect width="200" height="76" rx="6"/></clipPath>
+    <rect width="200" height="76" rx="6" fill="#ffffff"/>
+    <g clip-path="url(#clip-_overview-1)">
+      <rect width="200" height="32" fill="#e2e8f0"/>
+      <text x="16" y="20.67" font-weight="700" fill="#0f172b">billing.lines</text>
+      <text x="16" y="47.67" font-weight="700" fill="#615fff">PK</text>
+      <text x="64" y="47.67" fill="#0f172b">id</text>
+      <text x="184" y="47.67" text-anchor="end" fill="#62748e">int</text>
+      <line x1="0" x2="200" y1="54" y2="54" stroke="#e2e8f0"/>
+      <text x="16" y="69.67" font-weight="700" fill="#615fff">FK</text>
+      <text x="64" y="69.67" fill="#0f172b">invoice_id</text>
+      <text x="184" y="69.67" text-anchor="end" fill="#62748e">int</text>
+    </g>
+    <rect width="200" height="76" rx="6" fill="none" stroke="#cad5e2" stroke-width="1"/>
+  </g>
+  <g transform="translate(0 0)" data-key="core.customers" font-family='"JetBrains Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace' font-size="13.33">
+    <clipPath id="clip-_overview-2"><rect width="240" height="98" rx="6"/></clipPath>
+    <rect width="240" height="98" rx="6" fill="#ffffff"/>
+    <g clip-path="url(#clip-_overview-2)">
+      <rect width="240" height="32" fill="#e2e8f0"/>
+      <text x="16" y="20.67" font-weight="700" fill="#0f172b">core.customers</text>
+      <text x="16" y="47.67" font-weight="700" fill="#615fff">PK</text>
+      <text x="64" y="47.67" fill="#0f172b">id</text>
+      <text x="224" y="47.67" text-anchor="end" fill="#62748e">int</text>
+      <line x1="0" x2="240" y1="54" y2="54" stroke="#e2e8f0"/>
+      <text x="16" y="69.67" font-weight="700" fill="#615fff">UK</text>
+      <text x="64" y="69.67" fill="#0f172b">email</text>
+      <text x="224" y="69.67" text-anchor="end" fill="#62748e">str</text>
+      <line x1="0" x2="240" y1="76" y2="76" stroke="#e2e8f0"/>
+      <text x="16" y="91.67" font-weight="700" fill="#615fff">FK</text>
+      <text x="64" y="91.67" fill="#0f172b">referred_by_id</text>
+      <text x="224" y="91.67" text-anchor="end" fill="#62748e">int?</text>
+    </g>
+    <rect width="240" height="98" rx="6" fill="none" stroke="#cad5e2" stroke-width="1"/>
+  </g>
+  <g transform="translate(840 40)" data-key="enum:Status" font-family='"JetBrains Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace' font-size="13.33">
+    <clipPath id="clip-_overview-3"><rect width="200" height="76" rx="6"/></clipPath>
+    <rect width="200" height="76" rx="6" fill="#ffffff"/>
+    <g clip-path="url(#clip-_overview-3)">
+      <rect width="200" height="32" fill="#d8deff"/>
+      <text x="16" y="20.67" font-weight="700" fill="#0f172b">Status</text>
+      <text x="16" y="47.67" fill="#0f172b">OPEN</text>
+      <line x1="0" x2="200" y1="54" y2="54" stroke="#e2e8f0"/>
+      <text x="16" y="69.67" fill="#0f172b">PAID</text>
+    </g>
+    <rect width="200" height="76" rx="6" fill="none" stroke="#cad5e2" stroke-width="1"/>
+  </g>
+</svg>

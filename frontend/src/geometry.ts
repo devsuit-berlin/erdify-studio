@@ -1,6 +1,6 @@
 // Pure geometry of the canvas: where edges meet boxes and how their ends look.
 
-import { FAN_STEP } from "./drawing";
+import { FAN_STEP } from "./drawing.ts";
 
 export interface Point {
   x: number;

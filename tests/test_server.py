@@ -202,7 +202,9 @@ def test_paths_outside_static_or_missing_are_404(studio: Studio, path: str) -> N
 
 
 @pytest.mark.parametrize("token", [None, "wrong"])
-@pytest.mark.parametrize(("method", "path"), [("GET", "/api/diagrams"), ("PUT", "/api/layout")])
+@pytest.mark.parametrize(
+    ("method", "path"), [("GET", "/api/diagrams"), ("PUT", "/api/layout"), ("POST", "/api/svg")]
+)
 def test_api_requires_the_token(studio: Studio, token: str | None, method: str, path: str) -> None:
     headers = {"X-Studio-Token": token} if token else {}
     status, _, body = studio.request(method, path, b"{}", headers=headers, token=False)
@@ -378,12 +380,12 @@ def _crash(*args: object, **kwargs: object) -> None:
     raise RuntimeError("boom")
 
 
-@pytest.mark.parametrize("target", ["build_diagrams", "save_diagrams"])
+@pytest.mark.parametrize("target", ["build_studio", "save_diagrams"])
 def test_an_unexpected_error_is_500_not_a_dropped_connection(
     studio: Studio, monkeypatch: pytest.MonkeyPatch, target: str
 ) -> None:
     monkeypatch.setattr(f"erdify_studio._server.{target}", _crash)
-    if target == "build_diagrams":
+    if target == "build_studio":
         status, _, body = studio.request("GET", "/api/diagrams")
     else:
         status, _, body = studio.put_layout({"revision": None, "diagrams": {}})
@@ -393,3 +395,142 @@ def test_an_unexpected_error_is_500_not_a_dropped_connection(
 def test_the_old_overview_route_is_gone(studio: Studio) -> None:
     status, _, _ = studio.request("GET", "/api/overview")
     assert status == 404
+
+
+# --- SVG export on save ------------------------------------------------------------
+
+
+@pytest.fixture
+def exporting(tmp_path: Path) -> Iterator[Studio]:
+    root = _project(tmp_path / "project")
+    (root / "pyproject.toml").write_text(
+        '[tool.erdify]\ninclude = ["**/models.py"]\n[tool.erdify-studio]\nexport_dir = "erd"\n'
+    )
+    server = start_server(_loader(root), static_dir=_static(tmp_path), shown_path=SHOWN)
+    thread = threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True)
+    thread.start()
+    try:
+        yield Studio(server, root)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+def test_save_writes_the_svgs(exporting: Studio) -> None:
+    status, _, body = exporting.put_layout({"revision": None, "diagrams": _diagrams(exporting)})
+    result = _json(body)
+    assert (status, result["exported"], "exportError" in result) == (200, 2, False)
+    assert (exporting.root / "erd" / "overview.svg").is_file()
+    assert _payload(exporting)["pending"]["svgs"] == 0
+
+
+def test_a_failed_export_still_saves_the_layout(exporting: Studio) -> None:
+    models = exporting.root / "shop" / "models.py"
+    models.write_text(
+        models.read_text()
+        + '\n\nclass A(SQLModel, table=True):\n    __tablename__ = "a"\n'
+        + '    __table_args__ = {"schema": "Sales"}\n    id: int = Field(primary_key=True)\n'
+        + '\n\nclass B(SQLModel, table=True):\n    __tablename__ = "b"\n'
+        + '    __table_args__ = {"schema": "sales"}\n    id: int = Field(primary_key=True)\n'
+    )
+    (exporting.root / "pyproject.toml").write_text(
+        '[tool.erdify]\ninclude = ["**/models.py"]\n[tool.erdify-studio]\n'
+        'export_dir = "erd"\ngroup_by = "schema"\n'
+    )
+    status, _, body = exporting.put_layout({"revision": None, "diagrams": _diagrams(exporting)})
+    result = _json(body)
+    path = exporting.root / SHOWN
+    assert status == 200
+    assert "'Sales'" in result["exportError"] and "exported" not in result
+    assert result["revision"] == layout_revision(path)
+
+
+# --- download one diagram as SVG ---------------------------------------------------
+
+
+def _post_svg(studio: Studio, payload: object, **kwargs: Any) -> tuple[int, dict[str, str], bytes]:
+    headers = {"Content-Type": "application/json", **kwargs.pop("headers", {})}
+    return studio.request(
+        "POST", "/api/svg", json.dumps(payload).encode(), headers=headers, **kwargs
+    )
+
+
+def test_post_svg_returns_the_diagram(studio: Studio) -> None:
+    positions = _diagrams(studio)[OVERVIEW]
+    status, headers, body = _post_svg(studio, {"diagram": OVERVIEW, "positions": positions})
+    assert (status, headers["Content-Type"], headers["Cache-Control"]) == (
+        200,
+        "image/svg+xml; charset=utf-8",
+        "no-store",
+    )
+    assert headers["Content-Disposition"] == 'attachment; filename="overview.svg"'
+    assert body.startswith(b'<svg xmlns="http://www.w3.org/2000/svg"')
+    assert not (studio.root / SHOWN).exists()  # nothing written
+
+
+@pytest.mark.parametrize(
+    ("payload", "status"),
+    [
+        ({"diagram": "gone", "positions": {}}, 409),
+        ({"diagram": OVERVIEW, "positions": {"customers": [0, 0]}}, 409),
+        ({"diagram": OVERVIEW, "positions": []}, 400),
+        ({"positions": {}}, 400),
+        ({"diagram": 1, "positions": {}}, 400),
+    ],
+)
+def test_post_svg_errors(studio: Studio, payload: object, status: int) -> None:
+    assert _post_svg(studio, payload)[0] == status
+
+
+def test_post_svg_with_unreadable_models_is_500(studio: Studio) -> None:
+    (studio.root / "shop" / "models.py").write_text("class Broken(:\n")
+    status, _, body = _post_svg(studio, {"diagram": OVERVIEW, "positions": {}})
+    assert (status, "error" in _json(body)) == (500, True)
+
+
+def test_post_svg_bug_is_500(studio: Studio, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("erdify_studio._server.render_download", _crash)
+    status, _, body = _post_svg(studio, {"diagram": OVERVIEW, "positions": {}})
+    assert (status, _json(body)) == (500, {"error": "internal error (see the terminal)"})
+
+
+@pytest.mark.parametrize("method", ["DELETE", "PATCH"])
+def test_delete_and_patch_are_405(studio: Studio, method: str) -> None:
+    status, _, _ = studio.request(method, "/api/layout", b"{}")
+    assert status == 405
+
+
+def test_post_svg_with_a_malformed_body_is_400(studio: Studio) -> None:
+    status, _, _ = studio.request(
+        "POST", "/api/svg", b"not json", headers={"Content-Type": "application/json"}
+    )
+    assert status == 400
+
+
+@pytest.mark.parametrize(("method", "path"), [("PUT", "/api/layout"), ("POST", "/api/svg")])
+def test_writes_from_a_foreign_host_are_refused(studio: Studio, method: str, path: str) -> None:
+    status, _, _ = studio.request(method, path, b"{}", headers={"Host": "evil.example"})
+    assert status == 403
+
+
+def test_get_of_the_layout_route_is_405(studio: Studio) -> None:
+    assert studio.request("GET", "/api/layout")[0] == 405
+
+
+def test_a_save_whose_export_breaks_still_answers_200(exporting: Studio) -> None:
+    (exporting.root / "erd").write_text("not a folder")  # export_dir is a file
+    status, _, body = exporting.put_layout({"revision": None, "diagrams": _diagrams(exporting)})
+    result = _json(body)
+    assert (status, "exportError" in result) == (200, True)
+    assert result["revision"] == layout_revision(exporting.root / SHOWN)
+
+
+def test_an_unexpected_export_error_after_save_still_answers_200(
+    exporting: Studio, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("erdify_studio._server.export_project", _crash)
+    status, _, body = exporting.put_layout({"revision": None, "diagrams": _diagrams(exporting)})
+    result = _json(body)
+    assert (status, result["exportError"]) == (200, "internal error (see the terminal)")
+    assert result["revision"] == layout_revision(exporting.root / SHOWN)

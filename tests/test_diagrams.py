@@ -346,13 +346,25 @@ def test_new_boxes_are_counted_per_diagram(tmp_path: Path) -> None:
     root = _project(tmp_path)
     _layout_with(root, {OVERVIEW: {"core.customers": (100, 200)}})
     # overview 3, billing 4 (3 own + 1 foreign), core 2
-    assert _payload(root)["pending"] == {"placed": 9, "diagrams": 3, "dropped": 0, "created": False}
+    assert _payload(root)["pending"] == {
+        "placed": 9,
+        "diagrams": 3,
+        "dropped": 0,
+        "created": False,
+        "svgs": 0,
+    }
 
 
 def test_up_to_date_layout_has_nothing_pending(tmp_path: Path) -> None:
     root = _project(tmp_path)
     _placed(root)
-    assert _payload(root)["pending"] == {"placed": 0, "diagrams": 0, "dropped": 0, "created": False}
+    assert _payload(root)["pending"] == {
+        "placed": 0,
+        "diagrams": 0,
+        "dropped": 0,
+        "created": False,
+        "svgs": 0,
+    }
 
 
 def test_stale_entries_and_diagrams_are_counted_as_dropped(tmp_path: Path) -> None:
@@ -363,7 +375,13 @@ def test_stale_entries_and_diagrams_are_counted_as_dropped(tmp_path: Path) -> No
     layout.set_position("core", "gone.table", 0, 0)
     layout.set_position("gone", "core.customers", 0, 0)
     save_layout(layout, path)
-    assert _payload(root)["pending"] == {"placed": 0, "diagrams": 0, "dropped": 2, "created": False}
+    assert _payload(root)["pending"] == {
+        "placed": 0,
+        "diagrams": 0,
+        "dropped": 2,
+        "created": False,
+        "svgs": 0,
+    }
 
 
 def test_a_hand_formatted_file_is_not_pending(tmp_path: Path) -> None:
@@ -371,7 +389,13 @@ def test_a_hand_formatted_file_is_not_pending(tmp_path: Path) -> None:
     _placed(root)
     path = root / "erdify-layout.json"
     path.write_text(dumps_layout(load_layout(path)).replace("\n", "\n\n  "))
-    assert _payload(root)["pending"] == {"placed": 0, "diagrams": 0, "dropped": 0, "created": False}
+    assert _payload(root)["pending"] == {
+        "placed": 0,
+        "diagrams": 0,
+        "dropped": 0,
+        "created": False,
+        "svgs": 0,
+    }
 
 
 def test_no_layout_file_is_pending_creation(tmp_path: Path) -> None:

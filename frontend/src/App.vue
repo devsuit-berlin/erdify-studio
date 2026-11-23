@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
-import { fetchDiagrams, saveLayout, type AllPositions, type DiagramJson, type Diagrams, type Position, type View } from "./api";
+import { downloadSvg, fetchDiagrams, saveLayout, type AllPositions, type DiagramJson, type Diagrams, type Position, type View } from "./api";
 import DiagramCanvas from "./components/DiagramCanvas.vue";
 import DiagramList from "./components/DiagramList.vue";
 import StudioToolbar from "./components/StudioToolbar.vue";
@@ -27,7 +27,15 @@ const moved = ref<Set<string>>(new Set());
 const edits: Record<string, number> = {};
 const saving = ref(false);
 
-const dirty = computed(() => pendingShown.value || moved.value.size > 0);
+// Only outdated SVGs: Save fixes them, but nothing was edited — no "Unsaved changes"
+// badge, no prompt on leaving.
+const pendingLayout = computed(() => {
+  const pending = loaded.value?.pending;
+  return !!pending && pendingShown.value && (pending.created || pending.placed > 0 || pending.dropped > 0);
+});
+const svgsOnly = computed(() => (loaded.value?.pending.svgs ?? 0) > 0 && !pendingLayout.value);
+const dirty = computed(() => pendingLayout.value || moved.value.size > 0);
+const saveable = computed(() => dirty.value || (pendingShown.value && svgsOnly.value));
 
 const diagram = computed<DiagramJson | null>(
   () => loaded.value?.diagrams.find((d) => d.name === current.value) ?? null,
@@ -36,7 +44,7 @@ const diagram = computed<DiagramJson | null>(
 const banner = computed(() => {
   const data = loaded.value;
   if (!data || !pendingShown.value) return null;
-  const { placed, diagrams, dropped, created } = data.pending;
+  const { placed, diagrams, dropped, created, svgs } = data.pending;
   if (placed) {
     return `${placed} new ${placed === 1 ? "box was" : "boxes were"} placed automatically in ${diagrams} ${diagrams === 1 ? "diagram" : "diagrams"} — save to keep them.`;
   }
@@ -44,6 +52,7 @@ const banner = computed(() => {
   if (dropped) {
     return `The layout file has ${dropped} stale ${dropped === 1 ? "entry" : "entries"} — save to drop them.`;
   }
+  if (svgs && data.exportPath) return `The SVGs in ${data.exportPath} are out of date — save to update them.`;
   return null;
 });
 
@@ -105,7 +114,7 @@ function onMove(key: string, position: Position): void {
 }
 
 async function save(): Promise<void> {
-  if (!loaded.value || saving.value || !dirty.value) return;
+  if (!loaded.value || saving.value || !saveable.value) return;
   saving.value = true;
   const editsAtSave = { ...edits };
   try {
@@ -113,10 +122,25 @@ async function save(): Promise<void> {
     if (outcome.ok) {
       revision.value = outcome.revision;
       moved.value = new Set([...moved.value].filter((name) => edits[name] !== editsAtSave[name]));
-      pendingShown.value = false;
       newKeys.value = {};
       toast.remove(SAVE_ERROR);
-      toast.add({ title: `Saved to ${outcome.saved}`, color: "success", icon: "i-lucide-check" });
+      // The layout file now holds everything; only the SVGs may still lag behind.
+      if (loaded.value) {
+        loaded.value.pending = { placed: 0, diagrams: 0, dropped: 0, created: false, svgs: outcome.exportError ? 1 : 0 };
+      }
+      if (outcome.exportError) {
+        // The layout is saved; the SVGs are not. Keep Save enabled to retry.
+        pendingShown.value = true;
+        toast.add({
+          title: `Saved, but the SVG export failed: ${outcome.exportError}`,
+          color: "warning",
+          icon: "i-lucide-triangle-alert",
+          duration: 0,
+        });
+      } else {
+        pendingShown.value = false;
+        toast.add({ title: `Saved to ${outcome.saved}`, color: "success", icon: "i-lucide-check" });
+      }
     } else if (outcome.conflict) {
       showError(
         "The layout file or the models changed since this page loaded (on disk or from another tab). Reload to get them — saving now would overwrite them.",
@@ -127,6 +151,25 @@ async function save(): Promise<void> {
   } finally {
     saving.value = false;
   }
+}
+
+const downloading = ref(false);
+
+async function download(): Promise<void> {
+  if (!loaded.value || downloading.value) return;
+  downloading.value = true;
+  let outcome;
+  try {
+    outcome = await downloadSvg(current.value, positions.value[current.value]);
+  } finally {
+    downloading.value = false;
+  }
+  if (outcome.ok) return;
+  showError(
+    outcome.conflict
+      ? "The models changed since this page loaded. Reload to get them, then download again."
+      : `Could not download the SVG: ${outcome.message}`,
+  );
 }
 
 // One sticky error toast at a time: adding it again with the same id updates the open
@@ -160,8 +203,8 @@ onMounted(async () => {
     positions.value = Object.fromEntries(data.diagrams.map((d) => [d.name, { ...d.positions }]));
     newKeys.value = Object.fromEntries(data.diagrams.map((d) => [d.name, new Set(d.new)]));
     revision.value = data.revision;
-    const { placed, dropped, created } = data.pending;
-    pendingShown.value = created || placed > 0 || dropped > 0;
+    const { placed, dropped, created, svgs } = data.pending;
+    pendingShown.value = created || placed > 0 || dropped > 0 || svgs > 0;
     loaded.value = data;
     // An unknown name in the hash is replaced, so the URL names what is shown.
     if (hashDiagram() !== null) select(hashTarget());
@@ -180,7 +223,7 @@ onBeforeUnmount(() => {
 <template>
   <UApp>
     <div class="flex h-screen flex-col">
-      <StudioToolbar :title="diagram?.label ?? 'Overview'" :dirty="dirty" :saving="saving" @save="save" />
+      <StudioToolbar :title="diagram?.label ?? 'Overview'" :dirty="dirty" :saveable="saveable" :saving="saving" :downloading="downloading" @save="save" @download="download" />
       <UAlert v-if="banner" :title="banner" color="primary" variant="subtle" icon="i-lucide-sparkles" class="rounded-none" />
       <div class="flex min-h-0 flex-1">
         <DiagramList
