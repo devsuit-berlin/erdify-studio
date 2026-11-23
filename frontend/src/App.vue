@@ -196,7 +196,9 @@ onBeforeUnmount(() => {
             :new-keys="newKeys[current] ?? EMPTY"
             :project-path="loaded.projectPath"
             :initial-view="views[current]"
+            :focus-key="focusKey"
             @move="onMove"
+            @open="onOpen"
             @view="onView"
           />
         </main>
