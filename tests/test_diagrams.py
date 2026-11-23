@@ -683,3 +683,4 @@ def test_a_group_named_like_a_built_in_label_is_told_apart(tmp_path: Path, name:
     labels = [d["label"] for d in payload["diagrams"]]
     assert len(set(labels)) == len(labels)
     assert f"{name} (group)" in labels
+    assert (labels[0], labels[-1]) == ("Overview", "Ungrouped")  # the built-ins keep theirs

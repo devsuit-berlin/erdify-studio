@@ -77,9 +77,10 @@ function hashTarget(): string {
   return loaded.value?.diagrams.some((d) => d.name === wanted) ? wanted! : OVERVIEW;
 }
 
-// Editing the hash in the address bar (or a link to it) switches diagrams.
+// Editing the hash in the address bar (or a link to it) switches diagrams; a hash
+// that names no diagram (`#foo`, an emptied one) is left alone.
 function onHashChange(): void {
-  if (loaded.value) select(hashTarget());
+  if (loaded.value && hashDiagram() !== null) select(hashTarget());
 }
 
 // Set when a diagram is opened from a foreign box: that entity is centred there.
@@ -163,7 +164,7 @@ onMounted(async () => {
     pendingShown.value = created || placed > 0 || dropped > 0;
     loaded.value = data;
     // An unknown name in the hash is replaced, so the URL names what is shown.
-    if (window.location.hash) select(hashTarget());
+    if (hashDiagram() !== null) select(hashTarget());
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : String(error);
   }
