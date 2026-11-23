@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - With `export_dir` set, `check` also reports missing, outdated and stale SVGs, and
   Save in studio writes them; studio shows when they are out of date, and a failed
   export after a save is reported without losing the saved layout.
+- **Download SVG** in studio's toolbar: the open diagram as SVG with the positions on
+  screen, without `export_dir` and without writing a file (`POST /api/svg`).
 - Group diagrams in the canvas: a list switches between the overview and one diagram
   per group. A group diagram shows its entities, the enums they use and greyed-out,
   name-only foreign boxes for connected entities of other groups; clicking one opens

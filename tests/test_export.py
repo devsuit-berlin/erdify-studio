@@ -7,8 +7,8 @@ import erdify
 import pytest
 
 from erdify_studio import DEFAULT_GROUP, OVERVIEW, StudioConfig, load_config, place_project
-from erdify_studio._diagrams import Diagrams
-from erdify_studio._errors import ExportError
+from erdify_studio._diagrams import Diagrams, build_diagrams
+from erdify_studio._errors import ExportError, LayoutConflictError, PositionsError
 from erdify_studio._export import (
     ExportResult,
     OutOfDateLayoutError,
@@ -18,6 +18,7 @@ from erdify_studio._export import (
     export_files,
     export_paths,
     export_project,
+    render_download,
     slug,
 )
 from erdify_studio.cli import main
@@ -425,3 +426,57 @@ def test_only_lowercase_svg_files_are_owned(tmp_path: Path) -> None:
     (groups / "photo.SVG").write_text("x")
     assert _export(root).deleted == ()
     assert (groups / "photo.SVG").read_text() == "x"
+
+
+# --- download one diagram ----------------------------------------------------------
+
+
+def test_download_renders_the_positions_sent(tmp_path: Path) -> None:
+    root = _project(tmp_path, studio="")  # no export_dir needed
+    project, config = _load(root)
+    payload = build_diagrams(project, config, shown_path="x")
+    core = next(d for d in payload["diagrams"] if d["name"] == "core")
+    moved = {**core["positions"], "core.customers": [777, 55]}
+    name, svg = render_download(project, config, "core", moved)
+    assert name == "core.svg"
+    assert 'transform="translate(777 55)" data-key="core.customers"' in svg
+
+
+@pytest.mark.parametrize(
+    ("diagram", "name"), [(OVERVIEW, "overview.svg"), ("my app", "my-app.svg")]
+)
+def test_download_file_names(tmp_path: Path, diagram: str, name: str) -> None:
+    root = _project(
+        tmp_path,
+        MODELS.replace('"schema": "core"', '"schema": "my app"').replace(
+            'foreign_key="core.customers.id"', 'foreign_key="my app.customers.id"'
+        ),
+        studio="",
+    )
+    project, config = _load(root)
+    payload = build_diagrams(project, config, shown_path="x")
+    positions = next(d for d in payload["diagrams"] if d["name"] == diagram)["positions"]
+    assert render_download(project, config, diagram, dict(positions))[0] == name
+
+
+def test_download_of_an_unknown_diagram_is_a_conflict(tmp_path: Path) -> None:
+    root = _project(tmp_path, studio="")
+    project, config = _load(root)
+    with pytest.raises(LayoutConflictError, match="'gone'"):
+        render_download(project, config, "gone", {})
+
+
+def test_download_with_other_boxes_is_a_conflict(tmp_path: Path) -> None:
+    root = _project(tmp_path, studio="")
+    project, config = _load(root)
+    with pytest.raises(LayoutConflictError, match="models changed"):
+        render_download(project, config, "core", {"core.customers": [0, 0]})
+
+
+def test_download_refuses_bad_positions(tmp_path: Path) -> None:
+    root = _project(tmp_path, studio="")
+    project, config = _load(root)
+    payload = build_diagrams(project, config, shown_path="x")
+    core = next(d for d in payload["diagrams"] if d["name"] == "core")
+    with pytest.raises(PositionsError):
+        render_download(project, config, "core", {**core["positions"], "core.customers": [True, 0]})

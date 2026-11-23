@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
-import { fetchDiagrams, saveLayout, type AllPositions, type DiagramJson, type Diagrams, type Position, type View } from "./api";
+import { downloadSvg, fetchDiagrams, saveLayout, type AllPositions, type DiagramJson, type Diagrams, type Position, type View } from "./api";
 import DiagramCanvas from "./components/DiagramCanvas.vue";
 import DiagramList from "./components/DiagramList.vue";
 import StudioToolbar from "./components/StudioToolbar.vue";
@@ -145,6 +145,17 @@ async function save(): Promise<void> {
   }
 }
 
+async function download(): Promise<void> {
+  if (!loaded.value) return;
+  const outcome = await downloadSvg(current.value, positions.value[current.value]);
+  if (outcome.ok) return;
+  showError(
+    outcome.conflict
+      ? "The models changed since this page loaded. Reload to get them, then download again."
+      : `Could not download the SVG: ${outcome.message}`,
+  );
+}
+
 // One sticky error toast at a time: adding it again with the same id updates the open
 // one instead of stacking (removing it first would let its exit animation drop the new one).
 const SAVE_ERROR = "save-error";
@@ -196,7 +207,7 @@ onBeforeUnmount(() => {
 <template>
   <UApp>
     <div class="flex h-screen flex-col">
-      <StudioToolbar :title="diagram?.label ?? 'Overview'" :dirty="dirty" :saving="saving" @save="save" />
+      <StudioToolbar :title="diagram?.label ?? 'Overview'" :dirty="dirty" :saving="saving" @save="save" @download="download" />
       <UAlert v-if="banner" :title="banner" color="primary" variant="subtle" icon="i-lucide-sparkles" class="rounded-none" />
       <div class="flex min-h-0 flex-1">
         <DiagramList

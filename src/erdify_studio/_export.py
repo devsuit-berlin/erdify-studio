@@ -20,9 +20,9 @@ from erdify import Project
 
 from erdify_studio._check import Problem, check_project
 from erdify_studio._config import StudioConfig
-from erdify_studio._diagrams import Diagrams, build_diagrams
-from erdify_studio._errors import ExportError
-from erdify_studio._layout import DEFAULT_GROUP, OVERVIEW
+from erdify_studio._diagrams import Diagrams, _checked, build_diagrams
+from erdify_studio._errors import ExportError, LayoutConflictError, LayoutError, PositionsError
+from erdify_studio._layout import DEFAULT_GROUP, OVERVIEW, Layout
 from erdify_studio._svg import render_svg
 
 _OVERVIEW_FILE = PurePosixPath("overview.svg")
@@ -172,6 +172,39 @@ def build_studio(project: Project, config: StudioConfig, *, shown_path: str) -> 
     except ExportError:
         pass
     return payload
+
+
+def render_download(
+    project: Project, config: StudioConfig, diagram: str, positions: object
+) -> tuple[str, str]:
+    """One diagram as SVG with ``positions`` (unsaved ones included), for a download.
+
+    Needs no ``export_dir`` and writes nothing. Returns the file name
+    (``overview.svg`` or ``<slug>.svg``) and the SVG.
+
+    Raises:
+        LayoutConflictError: No such diagram, or other boxes than it shows: the models
+            changed since the page loaded.
+        PositionsError: ``positions`` is not an object, or a position is not a pair of
+            finite numbers within the coordinate limit.
+    """
+    payload = build_diagrams(project, config, shown_path=str(config.layout))
+    found = next((d for d in payload["diagrams"] if d["name"] == diagram), None)
+    if found is None:
+        raise LayoutConflictError(
+            f"the models changed since the page loaded (no diagram {diagram!r} any more); "
+            "reload the page"
+        )
+    shown = frozenset(found["own"]) | frozenset(found["foreign"])
+    layout = Layout()
+    for key, (x, y) in _checked(positions, shown).items():
+        try:
+            layout.set_position(diagram, key, x, y)
+        except LayoutError as e:
+            raise PositionsError(str(e)) from None
+    found["positions"] = {key: [x, y] for key, (x, y) in layout.diagrams[diagram].items()}
+    name = "overview.svg" if diagram == OVERVIEW else export_paths([diagram])[diagram].name
+    return name, render_svg(found, payload["boxes"], payload["metrics"])
 
 
 def _shown(path: Path) -> str:

@@ -154,6 +154,17 @@ The user picked 1 (2026-11-23).
 - `exportPath` (the `export_dir` as the UI shows it, or null) is added to the
   payload for the banner text.
 
+### Download SVG (added 2026-11-23, user request)
+
+Not everyone wants SVGs in the repo, so `export_dir` stays opt-in and studio gets a
+**Download SVG** toolbar button for the open diagram. `POST /api/svg` takes
+`{"diagram", "positions"}` (the positions on screen, unsaved ones included), renders
+with `render_svg`, writes nothing and needs no `export_dir`. File name `overview.svg`
+or `<slug>.svg`. Other diagrams or boxes than the page shows → 409, bad positions →
+400. A separate `export_on_save = false` option was considered and left out: with
+`export_dir` set, `check` requires current SVGs, so Save without export would leave
+CI failing until someone exports.
+
 ### Cross-check (approach 1)
 
 - `scripts/geometry_cases.json`: input cases: box pairs in every direction (incl.

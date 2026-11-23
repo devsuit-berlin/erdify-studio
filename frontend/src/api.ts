@@ -150,3 +150,31 @@ export async function saveLayout(
   }
   return { ok: false, conflict: response.status === 409, message: await errorMessage(response) };
 }
+
+/** Download one diagram as SVG, drawn by the server with the positions the page shows. */
+export async function downloadSvg(
+  diagram: string,
+  positions: Record<string, Position>,
+): Promise<{ ok: true } | { ok: false; conflict: boolean; message: string }> {
+  let response: Response;
+  try {
+    response = await fetch("api/svg", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Studio-Token": token },
+      body: JSON.stringify({ diagram, positions }),
+    });
+  } catch {
+    return { ok: false, conflict: false, message: "erdify-studio is not running any more" };
+  }
+  if (!response.ok) {
+    return { ok: false, conflict: response.status === 409, message: await errorMessage(response) };
+  }
+  const name = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "")?.[1] ?? "diagram.svg";
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(url);
+  return { ok: true };
+}
