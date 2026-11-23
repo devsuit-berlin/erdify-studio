@@ -5,8 +5,8 @@ requests to it, so every request must name the server itself as ``Host`` (agains
 DNS rebinding) and, when it has one, as ``Origin``; the API also needs the random
 token of the URL the browser was opened with.
 
-Routes: ``GET /`` and ``GET /assets/*`` (the built frontend), ``GET /api/overview``
-(``build_overview``) and ``PUT /api/layout`` (``save_overview``).
+Routes: ``GET /`` and ``GET /assets/*`` (the built frontend), ``GET /api/diagrams``
+(``build_diagrams``) and ``PUT /api/layout`` (``save_diagrams``).
 
 The project is loaded again for every API request, so a reload after a ``git
 checkout`` or a model change shows the current models instead of treating their
@@ -30,8 +30,8 @@ import erdify
 from erdify import Project
 
 from erdify_studio._config import StudioConfig
+from erdify_studio._diagrams import build_diagrams, save_diagrams
 from erdify_studio._errors import LayoutConflictError, PositionsError, StudioError
-from erdify_studio._overview import build_overview, save_overview
 
 logger = logging.getLogger(__name__)
 
@@ -132,9 +132,9 @@ class _Handler(BaseHTTPRequestHandler):
         if not self._trusted():
             return
         path = self.path.split("?", 1)[0]
-        if path == "/api/overview":
+        if path == "/api/diagrams":
             if self._authorized():
-                self._overview()
+                self._diagrams()
         elif path == "/api/layout":
             self._error(HTTPStatus.METHOD_NOT_ALLOWED, "method not allowed")
         elif path.startswith("/api/"):
@@ -204,17 +204,17 @@ class _Handler(BaseHTTPRequestHandler):
             return None
         return file
 
-    def _overview(self) -> None:
+    def _diagrams(self) -> None:
         try:
             project, config = self.server.load()
-            overview = build_overview(project, config, shown_path=self.server.shown_path)
+            diagrams = build_diagrams(project, config, shown_path=self.server.shown_path)
         except _LOAD_ERRORS as e:
             self._error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
             return
         except Exception:
             self._internal_error()
             return
-        self._json(HTTPStatus.OK, overview)
+        self._json(HTTPStatus.OK, diagrams)
 
     def _save(self) -> None:
         payload = self._body()
@@ -223,7 +223,7 @@ class _Handler(BaseHTTPRequestHandler):
         try:
             with self.server.save_lock:
                 project, config = self.server.load()
-                revision = save_overview(project, config, payload["positions"], payload["revision"])
+                revision = save_diagrams(project, config, payload["diagrams"], payload["revision"])
         except PositionsError as e:
             self._error(HTTPStatus.BAD_REQUEST, str(e))
         except LayoutConflictError as e:
@@ -255,13 +255,13 @@ class _Handler(BaseHTTPRequestHandler):
             return None
         if (
             not isinstance(payload, dict)
-            or "positions" not in payload
+            or "diagrams" not in payload
             or not isinstance(payload.get("revision", 0), str | None)
             or "revision" not in payload
         ):
             self._error(
                 HTTPStatus.BAD_REQUEST,
-                'expected {"revision": string or null, "positions": {...}}',
+                'expected {"revision": string or null, "diagrams": {...}}',
             )
             return None
         return payload

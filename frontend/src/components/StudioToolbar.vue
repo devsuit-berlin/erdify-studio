@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{ dirty: boolean; saving: boolean }>();
+defineProps<{ title: string; dirty: boolean; saving: boolean }>();
 defineEmits<{ save: [] }>();
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -7,7 +7,7 @@ const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 
 <template>
   <header class="flex items-center gap-3 border-b border-default px-4 py-2">
-    <span class="font-semibold">erdify-studio · Overview</span>
+    <span class="font-semibold">erdify-studio · {{ title }}</span>
     <UBadge v-if="dirty" color="warning" variant="subtle" icon="i-lucide-circle-dot" label="Unsaved changes" />
     <UButton
       class="ml-auto"

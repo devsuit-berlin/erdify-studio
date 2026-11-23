@@ -1,41 +1,63 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 
-import type { Overview, Position } from "../api";
+import type { BoxDef, DiagramJson, DrawnBox, Metrics, Position, View } from "../api";
 import { FIT_MARGIN, MAX_ZOOM, MIN_ZOOM } from "../drawing";
 import { fanOffsets, type Rect } from "../geometry";
 import BoxNode from "./BoxNode.vue";
 import EdgeLine from "./EdgeLine.vue";
 
 const props = defineProps<{
-  overview: Overview;
+  boxes: Record<string, BoxDef>;
+  diagram: DiagramJson;
+  metrics: Metrics;
   positions: Record<string, Position>;
   newKeys: ReadonlySet<string>;
+  projectPath: string;
+  /** The view this diagram was left at; fitted when absent. */
+  initialView?: View;
+  /** A box to centre and outline on opening (came here from a foreign box). */
+  focusKey?: string;
 }>();
 
-const emit = defineEmits<{ move: [key: string, position: Position] }>();
+const emit = defineEmits<{
+  move: [key: string, position: Position];
+  view: [view: View];
+  /** A foreign box was clicked (not dragged): open its entity's group diagram. */
+  open: [key: string];
+}>();
+
+/** Pointer travel below which a press on a foreign box is a click, not a drag. */
+const CLICK_SLOP = 4;
 
 const svg = ref<SVGSVGElement | null>(null);
-const view = ref({ x: 0, y: 0, scale: 1 });
+const view = ref<View>(props.initialView ?? { x: 0, y: 0, scale: 1 });
+watch(view, (value) => emit("view", value));
+
+// What this diagram draws; Python decided it (own and foreign keys, sizes, edges).
+const drawn = computed<DrawnBox[]>(() => [
+  ...props.diagram.own.map((key) => ({ key, ...props.boxes[key], foreign: false })),
+  ...props.diagram.foreign.map((key) => {
+    const [width, height] = props.diagram.foreignSizes[key];
+    return { key, kind: "entity" as const, title: props.boxes[key].title, width, height, rows: [], foreign: true };
+  }),
+]);
 
 const rects = computed(() => {
   const found: Record<string, Rect> = {};
-  for (const box of props.overview.boxes) {
-    const [x, y] = props.positions[box.key] ?? [box.x, box.y];
+  for (const box of drawn.value) {
+    const [x, y] = props.positions[box.key] ?? props.diagram.positions[box.key];
     found[box.key] = { x, y, width: box.width, height: box.height };
   }
   return found;
 });
 
 const edges = computed(() => {
-  const shown = props.overview.edges.filter((e) => rects.value[e.from] && rects.value[e.to]);
-  const offsets = fanOffsets(shown);
-  return shown.map((edge, i) => ({ edge, offset: offsets[i] }));
+  const offsets = fanOffsets(props.diagram.edges);
+  return props.diagram.edges.map((edge, i) => ({ edge, offset: offsets[i] }));
 });
 
-const enumLinks = computed(() =>
-  props.overview.enumLinks.filter((l) => rects.value[l.enum] && rects.value[l.entity]),
-);
+const enumLinks = computed(() => props.diagram.enumLinks);
 
 // --- view: fit, zoom, pan -----------------------------------------------------------
 
@@ -64,6 +86,26 @@ function fit(): void {
     y: (height - (maxY - minY) * scale) / 2 - minY * scale,
   };
 }
+
+/** Centre ``key`` in the view at the current scale and outline it for a moment. */
+function focus(key: string): void {
+  const rect = rects.value[key];
+  const element = svg.value;
+  if (!rect || !element) return;
+  const { width, height } = element.getBoundingClientRect();
+  const { scale } = view.value;
+  view.value = {
+    scale,
+    x: width / 2 - (rect.x + rect.width / 2) * scale,
+    y: height / 2 - (rect.y + rect.height / 2) * scale,
+  };
+  highlighted.value = key;
+  window.setTimeout(() => {
+    if (highlighted.value === key) highlighted.value = null;
+  }, 1500);
+}
+
+const highlighted = ref<string | null>(null);
 
 function clamp(scale: number): number {
   return Math.min(Math.max(scale, MIN_ZOOM), MAX_ZOOM);
@@ -110,12 +152,21 @@ function onBackgroundUp(event: PointerEvent): void {
 
 // --- drag a box ---------------------------------------------------------------------
 
-const dragging = ref<{ key: string; pointer: number; x: number; y: number; bx: number; by: number } | null>(null);
+const dragging = ref<{
+  key: string;
+  pointer: number;
+  x: number;
+  y: number;
+  bx: number;
+  by: number;
+  // Set once the pointer travelled CLICK_SLOP: from then on it is a drag.
+  moved: boolean;
+} | null>(null);
 
 // The dragged box is drawn last, on top of the others.
 const ordered = computed(() => {
   const key = dragging.value?.key;
-  return key ? [...props.overview.boxes.filter((b) => b.key !== key), ...props.overview.boxes.filter((b) => b.key === key)] : props.overview.boxes;
+  return key ? [...drawn.value.filter((b) => b.key !== key), ...drawn.value.filter((b) => b.key === key)] : drawn.value;
 });
 
 // The pointer is captured by the <svg>, not the box: the dragged box is re-inserted
@@ -124,7 +175,15 @@ function onBoxDown(event: PointerEvent, key: string): void {
   if (event.button !== 0) return;
   event.stopPropagation();
   const rect = rects.value[key];
-  dragging.value = { key, pointer: event.pointerId, x: event.clientX, y: event.clientY, bx: rect.x, by: rect.y };
+  dragging.value = {
+    key,
+    pointer: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    bx: rect.x,
+    by: rect.y,
+    moved: false,
+  };
   svg.value?.setPointerCapture(event.pointerId);
 }
 
@@ -135,6 +194,8 @@ function onBoxMove(event: PointerEvent): void {
     dragging.value = null; // the release was missed (e.g. outside the window)
     return;
   }
+  if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < CLICK_SLOP) return;
+  drag.moved = true;
   const { scale } = view.value;
   const x = Math.round(drag.bx + (event.clientX - drag.x) / scale);
   const y = Math.round(drag.by + (event.clientY - drag.y) / scale);
@@ -145,12 +206,21 @@ function onBoxMove(event: PointerEvent): void {
 }
 
 function onBoxUp(event: PointerEvent): void {
-  if (dragging.value?.pointer === event.pointerId) dragging.value = null;
+  const drag = dragging.value;
+  if (drag?.pointer !== event.pointerId) return;
+  dragging.value = null;
+  // A click without movement on a foreign box opens its group (not on a cancelled pointer).
+  if (event.type === "pointerup" && !drag.moved && drawn.value.find((b) => b.key === drag.key)?.foreign) {
+    emit("open", drag.key);
+  }
 }
 
-onMounted(fit);
+onMounted(() => {
+  if (!props.initialView) fit();
+  if (props.focusKey) focus(props.focusKey);
+});
 
-defineExpose({ fit });
+defineExpose({ fit, focus });
 </script>
 
 <template>
@@ -203,18 +273,19 @@ defineExpose({ fit });
           :box="box"
           :x="rects[box.key].x"
           :y="rects[box.key].y"
-          :metrics="overview.metrics"
+          :metrics="metrics"
           :is-new="newKeys.has(box.key)"
-          :dragging="dragging?.key === box.key"
+          :dragging="dragging?.moved === true && dragging.key === box.key"
+          :highlighted="highlighted === box.key"
           @pointerdown="onBoxDown($event, box.key)"
         />
       </g>
     </svg>
     <p
-      v-if="!overview.boxes.length"
+      v-if="!drawn.length"
       class="pointer-events-none absolute inset-0 flex items-center justify-center text-muted"
     >
-      No entities found in {{ overview.projectPath }}.
+      No entities found in {{ projectPath }}.
     </p>
     <div class="absolute right-4 bottom-4 flex gap-1">
       <UButton icon="i-lucide-minus" color="neutral" variant="outline" aria-label="Zoom out" @click="zoom(1 / 1.25)" />

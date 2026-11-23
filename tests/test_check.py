@@ -21,7 +21,8 @@ from erdify_studio import (
     place_project,
     save_layout,
 )
-from erdify_studio._overview import build_overview
+from erdify_studio._check import DiagramContent
+from erdify_studio._diagrams import build_diagrams
 from erdify_studio.cli import main
 
 MODELS = """\
@@ -171,8 +172,8 @@ def test_same_name_classes_in_two_modules_are_separate_entities(tmp_path: Path) 
     assert positions[keys[0]] != positions[keys[1]]
     assert check_project(project, config) == []
     # The canvas shows two boxes, one per class.
-    overview = build_overview(project, config, shown_path="erdify-layout.json")
-    assert [box["key"] for box in overview["boxes"]] == keys
+    overview = build_diagrams(project, config, shown_path="erdify-layout.json")
+    assert list(overview["boxes"]) == keys
 
 
 def test_without_relationships_there_are_no_foreign_boxes(tmp_path: Path) -> None:
@@ -515,3 +516,35 @@ def test_cli_internal_error_exits_two_with_traceback(
     assert err.splitlines()[-1] == (
         "erdify-studio: internal error (please report it with the traceback above)"
     )
+
+
+# --- what a diagram draws ----------------------------------------------------------
+
+GROUP = DiagramContent(frozenset({"a", "b"}), frozenset({"x", "y"}), frozenset({"enum:E"}))
+
+
+@pytest.mark.parametrize(
+    ("a", "b", "shown"),
+    [
+        ("a", "b", True),
+        ("a", "x", True),
+        ("x", "a", True),
+        ("a", "a", True),
+        ("x", "y", False),  # both foreign: the edge belongs to another group
+        ("a", "z", False),  # z is not in the diagram
+    ],
+)
+def test_shows_edge(a: str, b: str, shown: bool) -> None:
+    assert GROUP.shows_edge(a, b) is shown
+
+
+def test_the_overview_shows_every_edge() -> None:
+    assert DiagramContent(frozenset({"a", "b"})).shows_edge("a", "b")
+
+
+@pytest.mark.parametrize(
+    ("enum", "entity", "shown"),
+    [("enum:E", "a", True), ("enum:E", "x", False), ("enum:F", "a", False)],
+)
+def test_shows_enum_link(enum: str, entity: str, shown: bool) -> None:
+    assert GROUP.shows_enum_link(enum, entity) is shown

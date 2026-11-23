@@ -11,8 +11,8 @@ from typing import Any
 import erdify
 import pytest
 
-from erdify_studio import StudioConfig, load_config, place_project
-from erdify_studio._overview import build_overview, layout_revision
+from erdify_studio import OVERVIEW, StudioConfig, load_config, place_project
+from erdify_studio._diagrams import build_diagrams, layout_revision
 from erdify_studio._server import StudioServer, start_server
 
 MODELS = """\
@@ -120,15 +120,20 @@ def _json(body: bytes) -> Any:
     return json.loads(body)
 
 
-def _overview(studio: Studio) -> dict[str, Any]:
-    status, _, body = studio.request("GET", "/api/overview")
+def _payload(studio: Studio) -> dict[str, Any]:
+    status, _, body = studio.request("GET", "/api/diagrams")
     assert status == 200
     result: dict[str, Any] = _json(body)
     return result
 
 
+def _diagrams(studio: Studio) -> dict[str, dict[str, list[int]]]:
+    """Every diagram's positions, as the page sends them back unchanged."""
+    return {d["name"]: d["positions"] for d in _payload(studio)["diagrams"]}
+
+
 def _positions(studio: Studio) -> dict[str, list[int]]:
-    return {box["key"]: [box["x"], box["y"]] for box in _overview(studio)["boxes"]}
+    return _diagrams(studio)[OVERVIEW]
 
 
 # --- binding and static files -----------------------------------------------------
@@ -197,7 +202,7 @@ def test_paths_outside_static_or_missing_are_404(studio: Studio, path: str) -> N
 
 
 @pytest.mark.parametrize("token", [None, "wrong"])
-@pytest.mark.parametrize(("method", "path"), [("GET", "/api/overview"), ("PUT", "/api/layout")])
+@pytest.mark.parametrize(("method", "path"), [("GET", "/api/diagrams"), ("PUT", "/api/layout")])
 def test_api_requires_the_token(studio: Studio, token: str | None, method: str, path: str) -> None:
     headers = {"X-Studio-Token": token} if token else {}
     status, _, body = studio.request(method, path, b"{}", headers=headers, token=False)
@@ -207,7 +212,7 @@ def test_api_requires_the_token(studio: Studio, token: str | None, method: str, 
 @pytest.mark.parametrize("host", ["evil.example:{port}", "127.0.0.1:1", "evil.example"])
 def test_rejects_a_foreign_host(studio: Studio, host: str) -> None:
     status, _, _ = studio.request(
-        "GET", "/api/overview", headers={"Host": host.format(port=studio.port)}
+        "GET", "/api/diagrams", headers={"Host": host.format(port=studio.port)}
     )
     assert status == 403
 
@@ -219,20 +224,20 @@ def test_rejects_a_foreign_host_for_static_files(studio: Studio) -> None:
 
 def test_accepts_localhost(studio: Studio) -> None:
     status, _, _ = studio.request(
-        "GET", "/api/overview", headers={"Host": f"localhost:{studio.port}"}
+        "GET", "/api/diagrams", headers={"Host": f"localhost:{studio.port}"}
     )
     assert status == 200
 
 
 @pytest.mark.parametrize("origin", ["https://evil.example", "http://127.0.0.1:1", "null"])
 def test_rejects_a_foreign_origin(studio: Studio, origin: str) -> None:
-    status, _, _ = studio.request("GET", "/api/overview", headers={"Origin": origin})
+    status, _, _ = studio.request("GET", "/api/diagrams", headers={"Origin": origin})
     assert status == 403
 
 
 def test_accepts_the_own_origin(studio: Studio) -> None:
     status, _, _ = studio.request(
-        "GET", "/api/overview", headers={"Origin": f"http://127.0.0.1:{studio.port}"}
+        "GET", "/api/diagrams", headers={"Origin": f"http://127.0.0.1:{studio.port}"}
     )
     assert status == 200
 
@@ -240,10 +245,10 @@ def test_accepts_the_own_origin(studio: Studio) -> None:
 # --- API --------------------------------------------------------------------------
 
 
-def test_get_overview(studio: Studio) -> None:
+def test_get_diagrams(studio: Studio) -> None:
     project = erdify.load_project(studio.root, strict=True)
-    expected = build_overview(project, load_config(project.settings.pyproject), shown_path=SHOWN)
-    status, headers, body = studio.request("GET", "/api/overview")
+    expected = build_diagrams(project, load_config(project.settings.pyproject), shown_path=SHOWN)
+    status, headers, body = studio.request("GET", "/api/diagrams")
     assert (status, headers["Cache-Control"], headers["Content-Type"], _json(body)) == (
         200,
         "no-store",
@@ -253,22 +258,29 @@ def test_get_overview(studio: Studio) -> None:
 
 
 def test_put_layout_saves(studio: Studio) -> None:
-    status, _, body = studio.put_layout({"revision": None, "positions": _positions(studio)})
+    status, _, body = studio.put_layout({"revision": None, "diagrams": _diagrams(studio)})
     path = studio.root / SHOWN
     assert (status, _json(body)) == (200, {"saved": SHOWN, "revision": layout_revision(path)})
 
 
 def test_put_layout_bad_positions_is_400(studio: Studio) -> None:
-    positions: dict[str, object] = {**_positions(studio), "customers": [True, 1]}
-    status, _, body = studio.put_layout({"revision": None, "positions": positions})
+    diagrams: dict[str, Any] = _diagrams(studio)
+    diagrams[OVERVIEW] = {**diagrams[OVERVIEW], "customers": [True, 1]}
+    status, _, body = studio.put_layout({"revision": None, "diagrams": diagrams})
     assert (status, "error" in _json(body)) == (400, True)
     assert not (studio.root / SHOWN).exists()
 
 
 @pytest.mark.parametrize(
     "body",
-    [b"not json", b"[]", b'{"positions": {}}', b'{"revision": 1, "positions": {}}'],
-    ids=["not-json", "not-object", "no-revision", "revision-not-string"],
+    [
+        b"not json",
+        b"[]",
+        b'{"diagrams": {}}',
+        b'{"revision": 1, "diagrams": {}}',
+        b'{"revision": null, "positions": {}}',
+    ],
+    ids=["not-json", "not-object", "no-revision", "revision-not-string", "no-diagrams"],
 )
 def test_put_a_malformed_body_is_400(studio: Studio, body: bytes) -> None:
     status, _, _ = studio.request(
@@ -296,7 +308,7 @@ def test_put_without_length_is_411(studio: Studio) -> None:
 
 def test_put_wrong_content_type_is_415(studio: Studio) -> None:
     status, _, _ = studio.put_layout(
-        {"revision": None, "positions": {}}, headers={"Content-Type": "text/plain"}
+        {"revision": None, "diagrams": {}}, headers={"Content-Type": "text/plain"}
     )
     assert status == 415
 
@@ -304,21 +316,21 @@ def test_put_wrong_content_type_is_415(studio: Studio) -> None:
 def test_put_conflict_is_409(studio: Studio) -> None:
     project = erdify.load_project(studio.root, strict=True)
     place_project(project, load_config(project.settings.pyproject))
-    status, _, body = studio.put_layout({"revision": None, "positions": _positions(studio)})
+    status, _, body = studio.put_layout({"revision": None, "diagrams": _diagrams(studio)})
     assert (status, "changed" in _json(body)["error"]) == (409, True)
 
 
 def test_broken_layout_after_start_is_500_on_get(studio: Studio) -> None:
     (studio.root / SHOWN).write_text("<<<<<<< HEAD\n")
-    status, _, body = studio.request("GET", "/api/overview")
+    status, _, body = studio.request("GET", "/api/diagrams")
     assert (status, "error" in _json(body)) == (500, True)
 
 
 def test_broken_layout_is_never_overwritten(studio: Studio) -> None:
     path = studio.root / SHOWN
-    positions = _positions(studio)
+    diagrams = _diagrams(studio)
     path.write_text("<<<<<<< HEAD\n")
-    status, _, _ = studio.put_layout({"revision": layout_revision(path), "positions": positions})
+    status, _, _ = studio.put_layout({"revision": layout_revision(path), "diagrams": diagrams})
     assert (status, path.read_text()) == (500, "<<<<<<< HEAD\n")
 
 
@@ -349,16 +361,16 @@ def test_a_reload_shows_changed_models(studio: Studio) -> None:
 
 
 def test_saving_from_a_page_with_old_models_is_409(studio: Studio) -> None:
-    positions = _positions(studio)
+    diagrams = _diagrams(studio)
     (studio.root / "shop" / "models.py").write_text(MODELS + ORDER)
-    status, _, body = studio.put_layout({"revision": None, "positions": positions})
+    status, _, body = studio.put_layout({"revision": None, "diagrams": diagrams})
     assert (status, "models changed" in _json(body)["error"]) == (409, True)
     assert not (studio.root / SHOWN).exists()
 
 
 def test_a_parse_error_after_start_is_500(studio: Studio) -> None:
     (studio.root / "shop" / "models.py").write_text("class Broken(:\n")
-    status, _, body = studio.request("GET", "/api/overview")
+    status, _, body = studio.request("GET", "/api/diagrams")
     assert (status, "error" in _json(body)) == (500, True)
 
 
@@ -366,13 +378,18 @@ def _crash(*args: object, **kwargs: object) -> None:
     raise RuntimeError("boom")
 
 
-@pytest.mark.parametrize("target", ["build_overview", "save_overview"])
+@pytest.mark.parametrize("target", ["build_diagrams", "save_diagrams"])
 def test_an_unexpected_error_is_500_not_a_dropped_connection(
     studio: Studio, monkeypatch: pytest.MonkeyPatch, target: str
 ) -> None:
     monkeypatch.setattr(f"erdify_studio._server.{target}", _crash)
-    if target == "build_overview":
-        status, _, body = studio.request("GET", "/api/overview")
+    if target == "build_diagrams":
+        status, _, body = studio.request("GET", "/api/diagrams")
     else:
-        status, _, body = studio.put_layout({"revision": None, "positions": {}})
+        status, _, body = studio.put_layout({"revision": None, "diagrams": {}})
     assert (status, _json(body)) == (500, {"error": "internal error (see the terminal)"})
+
+
+def test_the_old_overview_route_is_gone(studio: Studio) -> None:
+    status, _, _ = studio.request("GET", "/api/overview")
+    assert status == 404

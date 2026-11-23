@@ -22,6 +22,7 @@ from erdify_studio import (
     place_project,
     save_layout,
 )
+from erdify_studio._place import METRICS, name_box_size
 from erdify_studio.cli import main
 
 MODELS = """\
@@ -510,3 +511,9 @@ def test_entities_sharing_a_table_name_are_placed_by_name(tmp_path: Path) -> Non
     root = _project(tmp_path, TWO_CLASSES_ONE_TABLE, studio='group_by = "none"\n')
     assert set(_place(root).layout.diagrams[OVERVIEW]) == {"Address", "ShippingAddress"}
     assert _check(root) == []
+
+
+def test_a_foreign_box_has_the_name_box_size() -> None:
+    width, height = name_box_size("core.customers")
+    assert height == METRICS["header"]
+    assert width == max(METRICS["charWidth"] * len("core.customers") + METRICS["padding"], 200)

@@ -1,57 +1,108 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
-import { fetchOverview, saveLayout, type Overview, type Position } from "./api";
+import { fetchDiagrams, saveLayout, type AllPositions, type DiagramJson, type Diagrams, type Position, type View } from "./api";
 import DiagramCanvas from "./components/DiagramCanvas.vue";
+import DiagramList from "./components/DiagramList.vue";
 import StudioToolbar from "./components/StudioToolbar.vue";
+
+const OVERVIEW = "_overview";
+const EMPTY: ReadonlySet<string> = new Set();
 
 const toast = useToast();
 
-const overview = ref<Overview | null>(null);
+const loaded = ref<Diagrams | null>(null);
 const loadError = ref<string | null>(null);
-const positions = ref<Record<string, Position>>({});
+// Per diagram: every box's position, and the boxes placed automatically (NEW until saved).
+const positions = ref<AllPositions>({});
+const newKeys = ref<Record<string, Set<string>>>({});
 const revision = ref<string | null>(null);
-const newKeys = ref<Set<string>>(new Set());
+const current = ref(OVERVIEW);
+// Pan and zoom per diagram, so switching back shows it as it was left.
+const views: Record<string, View> = {};
 // What the file lacks before anything is dragged (from the server); cleared by a save.
 const pendingShown = ref(false);
-const moved = ref(false);
+const moved = ref<Set<string>>(new Set());
 // Counts drags, so a save only clears "unsaved" when nothing moved while it ran.
 let edits = 0;
 const saving = ref(false);
 
-const dirty = computed(() => pendingShown.value || moved.value);
+const dirty = computed(() => pendingShown.value || moved.value.size > 0);
+
+const diagram = computed<DiagramJson | null>(
+  () => loaded.value?.diagrams.find((d) => d.name === current.value) ?? null,
+);
 
 const banner = computed(() => {
-  const loaded = overview.value;
-  if (!loaded || !pendingShown.value) return null;
-  const { placed, groupChanges, created } = loaded.pending;
+  const data = loaded.value;
+  if (!data || !pendingShown.value) return null;
+  const { placed, diagrams, dropped, created } = data.pending;
   if (placed) {
-    return `${placed} new ${placed === 1 ? "box was" : "boxes were"} placed automatically — save to keep them.`;
+    return `${placed} new ${placed === 1 ? "box was" : "boxes were"} placed automatically in ${diagrams} ${diagrams === 1 ? "diagram" : "diagrams"} — save to keep them.`;
   }
-  if (created) return `No layout file yet — save to create ${loaded.layoutPath}.`;
-  if (groupChanges) {
-    return `The layout file is out of date in ${groupChanges} group-diagram ${groupChanges === 1 ? "entry" : "entries"} — save to update it.`;
+  if (created) return `No layout file yet — save to create ${data.layoutPath}.`;
+  if (dropped) {
+    return `The layout file has ${dropped} stale ${dropped === 1 ? "entry" : "entries"} — save to drop them.`;
   }
   return null;
 });
 
+// Diagrams with moved boxes, or with boxes placed automatically and not saved yet.
+const unsaved = computed(() => {
+  const names = new Set(moved.value);
+  for (const [name, keys] of Object.entries(newKeys.value)) if (keys.size) names.add(name);
+  return names;
+});
+
+// The current diagram is kept in the URL hash, so a reload stays on it.
+function hashDiagram(): string | null {
+  const match = /^#diagram=(.*)$/.exec(window.location.hash);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+}
+
+function select(name: string): void {
+  if (name !== current.value) focusKey.value = undefined;
+  current.value = name;
+  history.replaceState(null, "", `#diagram=${encodeURIComponent(name)}`);
+}
+
+// Set when a diagram is opened from a foreign box: that entity is centred there.
+const focusKey = ref<string | undefined>(undefined);
+
+function onOpen(key: string): void {
+  const group = loaded.value?.boxes[key]?.group;
+  if (!group || !loaded.value?.diagrams.some((d) => d.name === group)) return;
+  select(group);
+  focusKey.value = key; // after select(), which clears it
+}
+
+function onView(view: View): void {
+  views[current.value] = view;
+}
+
 function onMove(key: string, position: Position): void {
-  positions.value = { ...positions.value, [key]: position };
-  moved.value = true;
+  const name = current.value;
+  positions.value = { ...positions.value, [name]: { ...positions.value[name], [key]: position } };
+  moved.value = new Set([...moved.value, name]);
   edits += 1;
 }
 
 async function save(): Promise<void> {
-  if (!overview.value || saving.value || !dirty.value) return;
+  if (!loaded.value || saving.value || !dirty.value) return;
   saving.value = true;
   const editsAtSave = edits;
   try {
     const outcome = await saveLayout(revision.value, positions.value);
     if (outcome.ok) {
       revision.value = outcome.revision;
-      moved.value = edits !== editsAtSave;
+      if (edits === editsAtSave) moved.value = new Set();
       pendingShown.value = false;
-      newKeys.value = new Set();
+      newKeys.value = {};
       toast.remove(SAVE_ERROR);
       toast.add({ title: `Saved to ${outcome.saved}`, color: "success", icon: "i-lucide-check" });
     } else if (outcome.conflict) {
@@ -92,13 +143,15 @@ onMounted(async () => {
   window.addEventListener("keydown", onKey);
   window.addEventListener("beforeunload", onBeforeUnload);
   try {
-    const loaded = await fetchOverview();
-    positions.value = Object.fromEntries(loaded.boxes.map((b) => [b.key, [b.x, b.y] as Position]));
-    newKeys.value = new Set(loaded.boxes.filter((b) => b.new).map((b) => b.key));
-    revision.value = loaded.revision;
-    const { placed, groupChanges, created } = loaded.pending;
-    pendingShown.value = created || placed > 0 || groupChanges > 0;
-    overview.value = loaded;
+    const data = await fetchDiagrams();
+    positions.value = Object.fromEntries(data.diagrams.map((d) => [d.name, { ...d.positions }]));
+    newKeys.value = Object.fromEntries(data.diagrams.map((d) => [d.name, new Set(d.new)]));
+    revision.value = data.revision;
+    const { placed, dropped, created } = data.pending;
+    pendingShown.value = created || placed > 0 || dropped > 0;
+    const wanted = hashDiagram();
+    current.value = data.diagrams.some((d) => d.name === wanted) ? wanted! : OVERVIEW;
+    loaded.value = data;
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : String(error);
   }
@@ -113,26 +166,43 @@ onBeforeUnmount(() => {
 <template>
   <UApp>
     <div class="flex h-screen flex-col">
-      <StudioToolbar :dirty="dirty" :saving="saving" @save="save" />
+      <StudioToolbar :title="diagram?.label ?? 'Overview'" :dirty="dirty" :saving="saving" @save="save" />
       <UAlert v-if="banner" :title="banner" color="primary" variant="subtle" icon="i-lucide-sparkles" class="rounded-none" />
-      <main class="min-h-0 flex-1">
-        <div v-if="loadError" class="flex h-full items-center justify-center p-8">
-          <UAlert
-            color="error"
-            icon="i-lucide-circle-alert"
-            title="Could not load the diagram"
-            :description="loadError"
-            class="max-w-xl"
-          />
-        </div>
-        <DiagramCanvas
-          v-else-if="overview"
-          :overview="overview"
-          :positions="positions"
-          :new-keys="newKeys"
-          @move="onMove"
+      <div class="flex min-h-0 flex-1">
+        <DiagramList
+          v-if="loaded && loaded.diagrams.length > 1"
+          :diagrams="loaded.diagrams"
+          :current="current"
+          :unsaved="unsaved"
+          @select="select"
         />
-      </main>
+        <main class="min-h-0 min-w-0 flex-1">
+          <div v-if="loadError" class="flex h-full items-center justify-center p-8">
+            <UAlert
+              color="error"
+              icon="i-lucide-circle-alert"
+              title="Could not load the diagram"
+              :description="loadError"
+              class="max-w-xl"
+            />
+          </div>
+          <DiagramCanvas
+            v-else-if="loaded && diagram"
+            :key="current"
+            :boxes="loaded.boxes"
+            :diagram="diagram"
+            :metrics="loaded.metrics"
+            :positions="positions[current]"
+            :new-keys="newKeys[current] ?? EMPTY"
+            :project-path="loaded.projectPath"
+            :initial-view="views[current]"
+            :focus-key="focusKey"
+            @move="onMove"
+            @open="onOpen"
+            @view="onView"
+          />
+        </main>
+      </div>
     </div>
   </UApp>
 </template>
