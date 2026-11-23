@@ -142,7 +142,8 @@ Writes every diagram as you arranged it to `[tool.erdify-studio] export_dir`, re
 commit and embed in READMEs and docs:
 
 - `overview.svg`, and `groups/<group>.svg` per group diagram (the group name in
-  lowercase ASCII with `-` between words, e.g. `my app` → `groups/my-app.svg`;
+  lowercase ASCII with `-` between words, e.g. `my app` → `groups/my-app.svg`; a name
+  without Latin letters gets a stable `group-<hash>.svg`;
   entities without a group → `groups/ungrouped.svg`). Two groups that would share a
   file are an error (exit 2) naming both.
 - Studio's light theme on a white background, so the diagrams read well on light and

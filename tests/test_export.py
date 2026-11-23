@@ -95,7 +95,8 @@ def _svgs(root: Path) -> set[PurePosixPath]:
         ("Bestellungen/Ä", "bestellungen-a"),
         ("__x__", "x"),
         ("ü", "u"),
-        ("!!!", "group"),
+        ("!!!", "group-9a7b006d"),
+        ("Заказы", "group-22ac8458"),
         ("shop.models", "shop-models"),
     ],
 )
@@ -496,3 +497,36 @@ def test_studio_loads_when_export_dir_is_a_file(tmp_path: Path) -> None:
     (root / "docs").mkdir()
     (root / "docs" / "erd").write_text("not a folder")
     assert _studio(root)["pending"]["svgs"] == 0
+
+
+def test_two_non_latin_groups_get_their_own_files() -> None:
+    paths = export_paths([OVERVIEW, "Заказы", "顧客"])
+    assert len(set(paths.values())) == 3
+
+
+def test_a_stale_groups_overview_svg_is_deleted(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    groups = root / "docs" / "erd" / "groups"
+    groups.mkdir(parents=True)
+    (groups / "overview.svg").write_text("x")  # a group "Overview" that is gone
+    assert PurePosixPath("groups/overview.svg") in _export(root).deleted
+
+
+def test_download_of_an_empty_diagram(tmp_path: Path) -> None:
+    root = _project(tmp_path, models="", studio="", place=False)
+    (root / "pyproject.toml").write_text(
+        '[tool.erdify]\ninclude = ["**/models.py"]\nallow_empty = true\n[tool.erdify-studio]\n'
+    )
+    project, config = _load(root)
+    name, svg = render_download(project, config, OVERVIEW, {})
+    assert name == "overview.svg" and svg.startswith("<svg")
+
+
+def test_an_export_dir_that_is_a_file_is_an_error(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    (root / "docs").mkdir()
+    (root / "docs" / "erd").write_text("not a folder")
+    with pytest.raises(ExportError, match="is not a folder"):
+        _export(root)
+    with pytest.raises(ExportError, match="is not a folder"):
+        _check(root)

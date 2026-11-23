@@ -58,8 +58,9 @@ The user picked 1 (2026-11-23).
 - `overview.svg` for the overview.
 - `groups/<slug>.svg` for every group diagram; `_default` → `groups/ungrouped.svg`.
 - **Slug**: NFKD-normalise, drop non-ASCII, lowercase, replace each run of characters
-  outside `[a-z0-9]` with `-`, strip `-` at both ends; an empty result becomes
-  `group`. `my app` → `my-app`, `Bestellungen/Ä` → `bestellungen-a`.
+  outside `[a-z0-9]` with `-`, strip `-` at both ends; an empty result (a name
+  without Latin letters or digits) becomes `group-<first 8 hex digits of the name's
+  UTF-8 SHA-1>`, so `Заказы` and `顧客` get files of their own. `my app` → `my-app`, `Bestellungen/Ä` → `bestellungen-a`.
 - Two groups with the same slug (`my app` and `my-app`, or a group literally named
   `ungrouped` next to `_default`) → `ExportError` naming both groups. `export`
   exits 2, `check` exits 2, and Save reports it (see below).

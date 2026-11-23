@@ -9,6 +9,7 @@ layout (``check_project`` without problems).
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 import unicodedata
@@ -69,9 +70,14 @@ class SvgProblem:
 
 
 def slug(name: str) -> str:
-    """``name`` as a file name: ASCII, lowercase, ``-`` between words; ``group`` if empty."""
+    """``name`` as a file name: ASCII, lowercase, ``-`` between words.
+
+    A name with no Latin letters or digits left (``Заказы``, ``顧客``) becomes
+    ``group-<first 8 hex digits of its UTF-8 SHA-1>``: stable, and distinct per name.
+    """
     ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
-    return _NOT_SLUG.sub("-", ascii_name.lower()).strip("-") or "group"
+    found = _NOT_SLUG.sub("-", ascii_name.lower()).strip("-")
+    return found or f"group-{hashlib.sha1(name.encode()).hexdigest()[:8]}"
 
 
 def export_paths(diagrams: Iterable[str]) -> dict[str, PurePosixPath]:
@@ -207,7 +213,8 @@ def render_download(
             layout.set_position(diagram, key, x, y)
         except LayoutError as e:
             raise PositionsError(str(e)) from None
-    found["positions"] = {key: [x, y] for key, (x, y) in layout.diagrams[diagram].items()}
+    placed = layout.diagrams.get(diagram, {})  # an empty diagram has no entries
+    found["positions"] = {key: [x, y] for key, (x, y) in placed.items()}
     name = "overview.svg" if diagram == OVERVIEW else export_paths([diagram])[diagram].name
     return name, render_svg(found, payload["boxes"], payload["metrics"])
 
@@ -223,6 +230,10 @@ def _shown(path: Path) -> str:
 def _export_dir(config: StudioConfig) -> Path:
     if config.export_dir is None:
         raise ExportError("set [tool.erdify-studio] export_dir to export SVGs")
+    # Checked up front: reading through a file fails differently per OS (Windows says
+    # "not found", so every SVG would look missing).
+    if config.export_dir.exists() and not config.export_dir.is_dir():
+        raise ExportError(f"export_dir {str(config.export_dir)!r} is not a folder")
     return config.export_dir
 
 
@@ -251,7 +262,7 @@ def _owned(directory: Path) -> list[Path]:
 def _stale(directory: Path, files: dict[PurePosixPath, str]) -> list[PurePosixPath]:
     # Compared case-insensitively: on macOS and Windows `Core.svg` *is* `core.svg`,
     # so deleting it as stale would delete the file just compared.
-    wanted = {path.name.lower() for path in files}
+    wanted = {path.name.lower() for path in files if path.parent == _GROUPS}
     return [_GROUPS / p.name for p in _owned(directory) if p.name.lower() not in wanted]
 
 
