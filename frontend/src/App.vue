@@ -66,8 +66,19 @@ function hashDiagram(): string | null {
 }
 
 function select(name: string): void {
+  if (name !== current.value) focusKey.value = undefined;
   current.value = name;
   history.replaceState(null, "", `#diagram=${encodeURIComponent(name)}`);
+}
+
+// Set when a diagram is opened from a foreign box: that entity is centred there.
+const focusKey = ref<string | undefined>(undefined);
+
+function onOpen(key: string): void {
+  const group = loaded.value?.boxes[key]?.group;
+  if (!group || !loaded.value?.diagrams.some((d) => d.name === group)) return;
+  select(group);
+  focusKey.value = key; // after select(), which clears it
 }
 
 function onView(view: View): void {

@@ -16,9 +16,19 @@ const props = defineProps<{
   projectPath: string;
   /** The view this diagram was left at; fitted when absent. */
   initialView?: View;
+  /** A box to centre and outline on opening (came here from a foreign box). */
+  focusKey?: string;
 }>();
 
-const emit = defineEmits<{ move: [key: string, position: Position]; view: [view: View] }>();
+const emit = defineEmits<{
+  move: [key: string, position: Position];
+  view: [view: View];
+  /** A foreign box was clicked (not dragged): open its entity's group diagram. */
+  open: [key: string];
+}>();
+
+/** Pointer travel below which a press on a foreign box is a click, not a drag. */
+const CLICK_SLOP = 4;
 
 const svg = ref<SVGSVGElement | null>(null);
 const view = ref<View>(props.initialView ?? { x: 0, y: 0, scale: 1 });
@@ -77,6 +87,26 @@ function fit(): void {
   };
 }
 
+/** Centre ``key`` in the view at the current scale and outline it for a moment. */
+function focus(key: string): void {
+  const rect = rects.value[key];
+  const element = svg.value;
+  if (!rect || !element) return;
+  const { width, height } = element.getBoundingClientRect();
+  const { scale } = view.value;
+  view.value = {
+    scale,
+    x: width / 2 - (rect.x + rect.width / 2) * scale,
+    y: height / 2 - (rect.y + rect.height / 2) * scale,
+  };
+  highlighted.value = key;
+  window.setTimeout(() => {
+    if (highlighted.value === key) highlighted.value = null;
+  }, 1500);
+}
+
+const highlighted = ref<string | null>(null);
+
 function clamp(scale: number): number {
   return Math.min(Math.max(scale, MIN_ZOOM), MAX_ZOOM);
 }
@@ -122,7 +152,16 @@ function onBackgroundUp(event: PointerEvent): void {
 
 // --- drag a box ---------------------------------------------------------------------
 
-const dragging = ref<{ key: string; pointer: number; x: number; y: number; bx: number; by: number } | null>(null);
+const dragging = ref<{
+  key: string;
+  pointer: number;
+  x: number;
+  y: number;
+  bx: number;
+  by: number;
+  // Set once the pointer travelled CLICK_SLOP: from then on it is a drag.
+  moved: boolean;
+} | null>(null);
 
 // The dragged box is drawn last, on top of the others.
 const ordered = computed(() => {
@@ -136,7 +175,15 @@ function onBoxDown(event: PointerEvent, key: string): void {
   if (event.button !== 0) return;
   event.stopPropagation();
   const rect = rects.value[key];
-  dragging.value = { key, pointer: event.pointerId, x: event.clientX, y: event.clientY, bx: rect.x, by: rect.y };
+  dragging.value = {
+    key,
+    pointer: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    bx: rect.x,
+    by: rect.y,
+    moved: false,
+  };
   svg.value?.setPointerCapture(event.pointerId);
 }
 
@@ -147,6 +194,8 @@ function onBoxMove(event: PointerEvent): void {
     dragging.value = null; // the release was missed (e.g. outside the window)
     return;
   }
+  if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < CLICK_SLOP) return;
+  drag.moved = true;
   const { scale } = view.value;
   const x = Math.round(drag.bx + (event.clientX - drag.x) / scale);
   const y = Math.round(drag.by + (event.clientY - drag.y) / scale);
@@ -157,14 +206,21 @@ function onBoxMove(event: PointerEvent): void {
 }
 
 function onBoxUp(event: PointerEvent): void {
-  if (dragging.value?.pointer === event.pointerId) dragging.value = null;
+  const drag = dragging.value;
+  if (drag?.pointer !== event.pointerId) return;
+  dragging.value = null;
+  // A click without movement on a foreign box opens its group (not on a cancelled pointer).
+  if (event.type === "pointerup" && !drag.moved && drawn.value.find((b) => b.key === drag.key)?.foreign) {
+    emit("open", drag.key);
+  }
 }
 
 onMounted(() => {
   if (!props.initialView) fit();
+  if (props.focusKey) focus(props.focusKey);
 });
 
-defineExpose({ fit });
+defineExpose({ fit, focus });
 </script>
 
 <template>
@@ -219,7 +275,8 @@ defineExpose({ fit });
           :y="rects[box.key].y"
           :metrics="metrics"
           :is-new="newKeys.has(box.key)"
-          :dragging="dragging?.key === box.key"
+          :dragging="dragging?.moved === true && dragging.key === box.key"
+          :highlighted="highlighted === box.key"
           @pointerdown="onBoxDown($event, box.key)"
         />
       </g>

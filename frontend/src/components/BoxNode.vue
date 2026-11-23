@@ -11,6 +11,8 @@ const props = defineProps<{
   metrics: Metrics;
   isNew: boolean;
   dragging: boolean;
+  /** Briefly outlined after opening this diagram from a foreign box. */
+  highlighted: boolean;
 }>();
 
 const fontSize = computed(() => props.metrics.charWidth / FONT_ADVANCE);
@@ -37,7 +39,13 @@ function baseline(top: number, height: number): number {
   <g
     :transform="`translate(${x} ${y})`"
     class="box"
-    :class="{ 'box--new': isNew, 'box--dragging': dragging, 'box--enum': box.kind === 'enum' }"
+    :class="{
+      'box--new': isNew,
+      'box--dragging': dragging,
+      'box--enum': box.kind === 'enum',
+      'box--foreign': box.foreign,
+      'box--highlighted': highlighted,
+    }"
     :data-key="box.key"
     :font-family="FONT_FAMILY"
     :font-size="fontSize"
@@ -120,6 +128,23 @@ function baseline(top: number, height: number): number {
 }
 .box--dragging .box__frame {
   stroke: var(--ui-primary);
+}
+.box--foreign {
+  cursor: pointer;
+}
+.box--foreign .box__body,
+.box--foreign .box__header {
+  fill: var(--ui-bg-muted);
+}
+.box--foreign .box__frame {
+  stroke-dasharray: 4 3;
+}
+.box--foreign .box__title {
+  fill: var(--ui-text-muted);
+}
+.box--highlighted .box__frame {
+  stroke: var(--ui-primary);
+  stroke-width: 3;
 }
 .box__divider {
   stroke: var(--ui-border);
