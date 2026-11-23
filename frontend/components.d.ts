@@ -13,6 +13,7 @@ declare module 'vue' {
   export interface GlobalComponents {
     BoxNode: typeof import('./src/components/BoxNode.vue')['default']
     DiagramCanvas: typeof import('./src/components/DiagramCanvas.vue')['default']
+    DiagramList: typeof import('./src/components/DiagramList.vue')['default']
     EdgeLine: typeof import('./src/components/EdgeLine.vue')['default']
     StudioToolbar: typeof import('./src/components/StudioToolbar.vue')['default']
     UAlert: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Alert.vue')['default']

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 
-import type { BoxDef, DiagramJson, DrawnBox, Metrics, Position } from "../api";
+import type { BoxDef, DiagramJson, DrawnBox, Metrics, Position, View } from "../api";
 import { FIT_MARGIN, MAX_ZOOM, MIN_ZOOM } from "../drawing";
 import { fanOffsets, type Rect } from "../geometry";
 import BoxNode from "./BoxNode.vue";
@@ -14,12 +14,15 @@ const props = defineProps<{
   positions: Record<string, Position>;
   newKeys: ReadonlySet<string>;
   projectPath: string;
+  /** The view this diagram was left at; fitted when absent. */
+  initialView?: View;
 }>();
 
-const emit = defineEmits<{ move: [key: string, position: Position] }>();
+const emit = defineEmits<{ move: [key: string, position: Position]; view: [view: View] }>();
 
 const svg = ref<SVGSVGElement | null>(null);
-const view = ref({ x: 0, y: 0, scale: 1 });
+const view = ref<View>(props.initialView ?? { x: 0, y: 0, scale: 1 });
+watch(view, (value) => emit("view", value));
 
 // What this diagram draws; Python decided it (own and foreign keys, sizes, edges).
 const drawn = computed<DrawnBox[]>(() => [
@@ -157,7 +160,9 @@ function onBoxUp(event: PointerEvent): void {
   if (dragging.value?.pointer === event.pointerId) dragging.value = null;
 }
 
-onMounted(fit);
+onMounted(() => {
+  if (!props.initialView) fit();
+});
 
 defineExpose({ fit });
 </script>

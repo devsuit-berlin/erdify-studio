@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
-import { fetchDiagrams, saveLayout, type AllPositions, type DiagramJson, type Diagrams, type Position } from "./api";
+import { fetchDiagrams, saveLayout, type AllPositions, type DiagramJson, type Diagrams, type Position, type View } from "./api";
 import DiagramCanvas from "./components/DiagramCanvas.vue";
+import DiagramList from "./components/DiagramList.vue";
 import StudioToolbar from "./components/StudioToolbar.vue";
 
 const OVERVIEW = "_overview";
@@ -17,6 +18,8 @@ const positions = ref<AllPositions>({});
 const newKeys = ref<Record<string, Set<string>>>({});
 const revision = ref<string | null>(null);
 const current = ref(OVERVIEW);
+// Pan and zoom per diagram, so switching back shows it as it was left.
+const views: Record<string, View> = {};
 // What the file lacks before anything is dragged (from the server); cleared by a save.
 const pendingShown = ref(false);
 const moved = ref<Set<string>>(new Set());
@@ -43,6 +46,33 @@ const banner = computed(() => {
   }
   return null;
 });
+
+// Diagrams with moved boxes, or with boxes placed automatically and not saved yet.
+const unsaved = computed(() => {
+  const names = new Set(moved.value);
+  for (const [name, keys] of Object.entries(newKeys.value)) if (keys.size) names.add(name);
+  return names;
+});
+
+// The current diagram is kept in the URL hash, so a reload stays on it.
+function hashDiagram(): string | null {
+  const match = /^#diagram=(.*)$/.exec(window.location.hash);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+}
+
+function select(name: string): void {
+  current.value = name;
+  history.replaceState(null, "", `#diagram=${encodeURIComponent(name)}`);
+}
+
+function onView(view: View): void {
+  views[current.value] = view;
+}
 
 function onMove(key: string, position: Position): void {
   const name = current.value;
@@ -108,6 +138,8 @@ onMounted(async () => {
     revision.value = data.revision;
     const { placed, dropped, created } = data.pending;
     pendingShown.value = created || placed > 0 || dropped > 0;
+    const wanted = hashDiagram();
+    current.value = data.diagrams.some((d) => d.name === wanted) ? wanted! : OVERVIEW;
     loaded.value = data;
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : String(error);
@@ -123,30 +155,41 @@ onBeforeUnmount(() => {
 <template>
   <UApp>
     <div class="flex h-screen flex-col">
-      <StudioToolbar :dirty="dirty" :saving="saving" @save="save" />
+      <StudioToolbar :title="diagram?.label ?? 'Overview'" :dirty="dirty" :saving="saving" @save="save" />
       <UAlert v-if="banner" :title="banner" color="primary" variant="subtle" icon="i-lucide-sparkles" class="rounded-none" />
-      <main class="min-h-0 flex-1">
-        <div v-if="loadError" class="flex h-full items-center justify-center p-8">
-          <UAlert
-            color="error"
-            icon="i-lucide-circle-alert"
-            title="Could not load the diagram"
-            :description="loadError"
-            class="max-w-xl"
-          />
-        </div>
-        <DiagramCanvas
-          v-else-if="loaded && diagram"
-          :key="current"
-          :boxes="loaded.boxes"
-          :diagram="diagram"
-          :metrics="loaded.metrics"
-          :positions="positions[current]"
-          :new-keys="newKeys[current] ?? EMPTY"
-          :project-path="loaded.projectPath"
-          @move="onMove"
+      <div class="flex min-h-0 flex-1">
+        <DiagramList
+          v-if="loaded && loaded.diagrams.length > 1"
+          :diagrams="loaded.diagrams"
+          :current="current"
+          :unsaved="unsaved"
+          @select="select"
         />
-      </main>
+        <main class="min-h-0 min-w-0 flex-1">
+          <div v-if="loadError" class="flex h-full items-center justify-center p-8">
+            <UAlert
+              color="error"
+              icon="i-lucide-circle-alert"
+              title="Could not load the diagram"
+              :description="loadError"
+              class="max-w-xl"
+            />
+          </div>
+          <DiagramCanvas
+            v-else-if="loaded && diagram"
+            :key="current"
+            :boxes="loaded.boxes"
+            :diagram="diagram"
+            :metrics="loaded.metrics"
+            :positions="positions[current]"
+            :new-keys="newKeys[current] ?? EMPTY"
+            :project-path="loaded.projectPath"
+            :initial-view="views[current]"
+            @move="onMove"
+            @view="onView"
+          />
+        </main>
+      </div>
     </div>
   </UApp>
 </template>

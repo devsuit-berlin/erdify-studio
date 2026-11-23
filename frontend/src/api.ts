@@ -92,6 +92,13 @@ export interface DrawnBox {
   foreign: boolean;
 }
 
+/** Pan and zoom of a diagram: screen = canvas * scale + (x, y). */
+export interface View {
+  x: number;
+  y: number;
+  scale: number;
+}
+
 /** Diagram name -> layout key -> position. */
 export type AllPositions = Record<string, Record<string, Position>>;
 
