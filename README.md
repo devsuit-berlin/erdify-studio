@@ -3,7 +3,8 @@
 ![Python](https://img.shields.io/badge/Python-3.11%E2%80%933.15-3776AB?logo=python&logoColor=white)
 ![uv](https://img.shields.io/badge/uv-managed-DE5FE9)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Status](https://img.shields.io/badge/status-pre--alpha-orange)
+![Status](https://img.shields.io/badge/status-alpha-orange)
+[![PyPI](https://img.shields.io/pypi/v/erdify-studio)](https://pypi.org/project/erdify-studio/)
 [![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/devsuit-berlin/erdify-studio/badges/coverage.json)](https://github.com/devsuit-berlin/erdify-studio/actions/workflows/test.yml)
 
 Arrange your [erdify](https://github.com/devsuit-berlin/erdify) ERDs by drag and drop,
@@ -11,9 +12,9 @@ commit the layout to your repo and check in CI that it stays up to date.
 
 **Documentation: <https://devsuit-berlin.github.io/erdify-studio/>**
 
-> **Status: pre-alpha.** `check`, `place --auto`, the canvas (overview and group
-> diagrams, live reload) and SVG export work; the first release is next. Progress is tracked in the
-> [v0.1.0 milestone](https://github.com/devsuit-berlin/erdify-studio/milestone/1).
+> **Status: alpha.** `check`, `place --auto`, the canvas (overview and group diagrams,
+> live reload) and SVG export work. The layout file format is versioned; the Python API
+> and the HTTP API between the canvas and the server may still change before 1.0.
 
 erdify generates ERDs from your code (SQLModel, SQLAlchemy, Django, Pydantic,
 dataclasses, SQL DDL), always auto-laid-out. erdify-studio adds a hand-made layout
@@ -186,7 +187,8 @@ once. Enums are keyed `enum:<name>`.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md).
+See [CONTRIBUTING.md](https://github.com/devsuit-berlin/erdify-studio/blob/main/CONTRIBUTING.md).
+Security issues: [SECURITY.md](https://github.com/devsuit-berlin/erdify-studio/blob/main/SECURITY.md).
 
 ## License
 
