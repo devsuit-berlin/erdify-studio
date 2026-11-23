@@ -9,8 +9,8 @@
 Arrange your [erdify](https://github.com/devsuit-berlin/erdify) ERDs by drag and drop,
 commit the layout to your repo and check in CI that it stays up to date.
 
-> **Status: pre-alpha.** `check`, `place --auto` and the canvas (overview and group
-> diagrams) work; SVG export is still to come. Progress is tracked in the
+> **Status: pre-alpha.** `check`, `place --auto`, the canvas (overview and group
+> diagrams) and SVG export work; the first release is next. Progress is tracked in the
 > [v0.1.0 milestone](https://github.com/devsuit-berlin/erdify-studio/milestone/1).
 
 erdify generates ERDs from your code (SQLModel, SQLAlchemy, Django, Pydantic,
