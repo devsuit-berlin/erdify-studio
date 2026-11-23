@@ -13,18 +13,24 @@ import hashlib
 import logging
 import re
 import unicodedata
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Literal
 
 from erdify import Project
 
-from erdify_studio._check import Problem, check_project
+from erdify_studio._check import Problem, check_project, project_diagrams
 from erdify_studio._config import StudioConfig
-from erdify_studio._diagrams import Diagrams, build_diagrams, checked_positions
+from erdify_studio._diagrams import (
+    Diagrams,
+    build_diagrams,
+    build_from,
+    checked_positions,
+    layout_revision,
+)
 from erdify_studio._errors import ExportError, LayoutConflictError, LayoutError, PositionsError
-from erdify_studio._layout import DEFAULT_GROUP, OVERVIEW, Layout
+from erdify_studio._layout import DEFAULT_GROUP, OVERVIEW, Layout, load_existing_layout
 from erdify_studio._svg import render_svg
 
 logger = logging.getLogger(__name__)
@@ -219,7 +225,8 @@ def render_download(
     if found is None:
         raise LayoutConflictError(
             f"the models changed since the page loaded (no diagram {diagram!r} any more); "
-            "reload the page"
+            "reload the page",
+            reason="models",
         )
     shown = frozenset(found["own"]) | frozenset(found["foreign"])
     layout = Layout()
@@ -232,6 +239,48 @@ def render_download(
     found["positions"] = {key: [x, y] for key, (x, y) in placed.items()}
     name = "overview.svg" if diagram == OVERVIEW else export_paths([diagram])[diagram].name
     return name, render_svg(found, payload["boxes"], payload["metrics"])
+
+
+def merge_studio(
+    project: Project, config: StudioConfig, positions: object, *, shown_path: str
+) -> Diagrams:
+    """``build_studio`` for the page's on-screen ``positions`` (unsaved ones included).
+
+    The starting layout is the layout file's, overridden by ``positions``: a box the
+    page lacks but the file has gets its committed position back; only boxes in
+    neither are placed (next to the others) and listed as ``new``. Positions of keys
+    or diagrams the project no longer has are ignored. ``pending`` is relative to the
+    layout file, as Save would change it.
+
+    Raises:
+        PositionsError: ``positions`` or a diagram is not an object, or a position is
+            not a pair of finite numbers within the coordinate limit.
+        LayoutError, OSError: The layout file cannot be read.
+    """
+    if not isinstance(positions, Mapping):
+        raise PositionsError(f"diagrams must be an object, got {type(positions).__name__!r}")
+    existing = load_existing_layout(config.layout)
+    start = Layout({name: dict(p) for name, p in (existing or Layout()).diagrams.items()})
+    contents = project_diagrams(project, config)
+    for name, sent in positions.items():
+        if name not in contents:
+            continue
+        if not isinstance(sent, Mapping):
+            raise PositionsError(f"positions must be an object, got {type(sent).__name__!r}")
+        shown = contents[name].shown
+        known = {key: value for key, value in sent.items() if key in shown}
+        for key, (x, y) in checked_positions(known, frozenset(known)).items():
+            try:
+                start.set_position(name, key, x, y)
+            except LayoutError as e:
+                raise PositionsError(str(e)) from None
+    payload = build_from(project, config, start, created=existing is None)
+    from_file = build_studio(project, config, shown_path=shown_path)
+    payload["revision"] = layout_revision(config.layout)
+    payload["layoutPath"] = shown_path
+    payload["exportPath"] = from_file["exportPath"]
+    payload["pending"] = from_file["pending"]
+    return payload
 
 
 def _shown(path: Path) -> str:

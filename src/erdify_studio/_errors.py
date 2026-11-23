@@ -1,5 +1,7 @@
 """Exceptions raised by erdify-studio."""
 
+from typing import Literal
+
 
 class StudioError(Exception):
     """Base for all errors raised by erdify-studio."""
@@ -30,7 +32,16 @@ class PositionsError(StudioError):
 
 
 class LayoutConflictError(LayoutError):
-    """The layout file changed since the positions to save were read from it."""
+    """The positions to save no longer fit: the layout file or the models changed.
+
+    Attributes:
+        reason: ``"layout"`` when the layout file changed since the positions were
+            read from it, ``"models"`` when the project now has other boxes or diagrams.
+    """
+
+    def __init__(self, message: str, reason: Literal["layout", "models"] = "layout") -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 class ExportError(StudioError):

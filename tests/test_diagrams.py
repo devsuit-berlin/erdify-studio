@@ -28,6 +28,7 @@ from erdify_studio._diagrams import (
     Diagrams,
     build_diagrams,
     layout_revision,
+    model_fingerprint,
     save_diagrams,
 )
 from erdify_studio._errors import LayoutConflictError, PositionsError
@@ -708,3 +709,55 @@ def test_a_group_named_like_a_built_in_label_is_told_apart(tmp_path: Path, name:
     assert len(set(labels)) == len(labels)
     assert f"{name} (group)" in labels
     assert (labels[0], labels[-1]) == ("Overview", "Ungrouped")  # the built-ins keep theirs
+
+
+# --- model fingerprint (#7) --------------------------------------------------------
+
+
+def _fingerprint(root: Path) -> str:
+    project, config = _load(root)
+    return model_fingerprint(project, config)
+
+
+def test_the_fingerprint_ignores_a_comment(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    before = _fingerprint(root)
+    (root / "shop" / "models.py").write_text(MODELS + "\n# just a comment\n")
+    assert _fingerprint(root) == before
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda m: m.replace(
+            "    email: str = Field(unique=True)\n",
+            "    email: str = Field(unique=True)\n    name: str\n",
+        ),
+        lambda m: (
+            m + '\n\nclass Tag(SQLModel, table=True):\n    __tablename__ = "tags"\n'
+            "    id: int = Field(primary_key=True)\n"
+        ),
+        lambda m: m.replace('__tablename__ = "lines"', '__tablename__ = "items"'),
+    ],
+    ids=["new column", "new table", "renamed table"],
+)
+def test_the_fingerprint_changes_with_the_model(tmp_path: Path, change: Any) -> None:
+    root = _project(tmp_path)
+    before = _fingerprint(root)
+    (root / "shop" / "models.py").write_text(change(MODELS))
+    assert _fingerprint(root) != before
+
+
+def test_the_fingerprint_changes_with_group_by(tmp_path: Path) -> None:
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    before = _fingerprint(_project(tmp_path / "a"))
+    after = _fingerprint(_project(tmp_path / "b", studio_toml='group_by = "none"\n'))
+    assert before != after
+
+
+def test_the_fingerprint_doesnt_read_the_layout_file(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    before = _fingerprint(root)
+    (root / "erdify-layout.json").write_text("<<<<<<< HEAD\n")
+    assert _fingerprint(root) == before

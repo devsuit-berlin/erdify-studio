@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Live reload: studio re-parses the project about every second (slower for large
+  projects) and the canvas follows model edits without losing unsaved positions — new
+  tables are placed next to the arrangement and marked NEW, removed ones disappear,
+  resized boxes keep their place. A model file that can't be loaded keeps the last good
+  diagram with an error banner; a layout file changed on disk is reported. New routes
+  `GET /api/status` and `POST /api/diagrams`; a 409 carries `reason` (`models` or
+  `layout`).
 - `erdify-studio export [path]`: writes every diagram as SVG to
   `[tool.erdify-studio] export_dir` — `overview.svg` and `groups/<group>.svg` — in
   studio's light theme on a white background, byte-identical on every machine. Stale

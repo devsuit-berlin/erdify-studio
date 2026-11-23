@@ -108,18 +108,61 @@ export type AllPositions = Record<string, Record<string, Position>>;
 
 export type SaveOutcome =
   | { ok: true; saved: string; revision: string; exported?: number; exportError?: string }
-  | { ok: false; conflict: boolean; message: string };
+  | { ok: false; conflict: boolean; reason?: ConflictReason; message: string };
+
+/** Why a 409: the layout file changed on disk, or the models changed since the page loaded. */
+export type ConflictReason = "layout" | "models";
+
+/** What changed on the server: the model fingerprint, the layout file, a load error. */
+export interface Status {
+  model: string;
+  revision: string | null;
+  error: string | null;
+}
 
 // The server opens the page as /?token=…; every API call must send it back.
 const token = new URLSearchParams(window.location.search).get("token") ?? "";
 
-async function errorMessage(response: Response): Promise<string> {
+async function errorBody(response: Response): Promise<{ message: string; reason?: ConflictReason }> {
   try {
-    const body = (await response.json()) as { error?: string };
-    return body.error ?? `HTTP ${response.status}`;
+    const body = (await response.json()) as { error?: string; reason?: ConflictReason };
+    return { message: body.error ?? `HTTP ${response.status}`, reason: body.reason };
   } catch {
-    return `HTTP ${response.status}`;
+    return { message: `HTTP ${response.status}` };
   }
+}
+
+async function errorMessage(response: Response): Promise<string> {
+  return (await errorBody(response)).message;
+}
+
+/** Thrown when the server can't be reached at all (not for an error response). */
+export class Unreachable extends Error {}
+
+export async function fetchStatus(): Promise<Status> {
+  let response: Response;
+  try {
+    response = await fetch("api/status", { headers: { "X-Studio-Token": token } });
+  } catch {
+    throw new Unreachable("erdify-studio is not running any more");
+  }
+  if (!response.ok) {
+    throw new Error(await errorMessage(response));
+  }
+  return (await response.json()) as Status;
+}
+
+/** The diagrams of the current models, merged with the positions on screen. */
+export async function mergeDiagrams(diagrams: AllPositions): Promise<Diagrams> {
+  const response = await fetch("api/diagrams", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Studio-Token": token },
+    body: JSON.stringify({ diagrams }),
+  });
+  if (!response.ok) {
+    throw new Error(await errorMessage(response));
+  }
+  return (await response.json()) as Diagrams;
 }
 
 export async function fetchDiagrams(): Promise<Diagrams> {
@@ -148,14 +191,15 @@ export async function saveLayout(
     const body = (await response.json()) as { saved: string; revision: string };
     return { ok: true, ...body };
   }
-  return { ok: false, conflict: response.status === 409, message: await errorMessage(response) };
+  const { message, reason } = await errorBody(response);
+  return { ok: false, conflict: response.status === 409, reason, message };
 }
 
 /** Download one diagram as SVG, drawn by the server with the positions the page shows. */
 export async function downloadSvg(
   diagram: string,
   positions: Record<string, Position>,
-): Promise<{ ok: true } | { ok: false; conflict: boolean; message: string }> {
+): Promise<{ ok: true } | { ok: false; conflict: boolean; reason?: ConflictReason; message: string }> {
   let response: Response;
   try {
     response = await fetch("api/svg", {
@@ -167,7 +211,8 @@ export async function downloadSvg(
     return { ok: false, conflict: false, message: "erdify-studio is not running any more" };
   }
   if (!response.ok) {
-    return { ok: false, conflict: response.status === 409, message: await errorMessage(response) };
+    const { message, reason } = await errorBody(response);
+    return { ok: false, conflict: response.status === 409, reason, message };
   }
   const name = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "")?.[1] ?? "diagram.svg";
   const url = URL.createObjectURL(await response.blob());

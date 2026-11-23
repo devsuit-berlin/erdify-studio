@@ -9,6 +9,7 @@ revision of the layout file the positions were read from.
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal, TypedDict
@@ -179,12 +180,42 @@ def build_diagrams(project: Project, config: StudioConfig, *, shown_path: str) -
         OSError: The layout file cannot be read.
     """
     revision = layout_revision(config.layout)
-    contents = project_diagrams(project, config)
     existing = load_existing_layout(config.layout)
+    payload = build_from(project, config, existing or Layout(), created=existing is None)
+    payload["revision"] = revision
+    payload["layoutPath"] = shown_path
+    return payload
+
+
+def model_fingerprint(project: Project, config: StudioConfig) -> str:
+    """A digest of what the canvas draws, positions aside; changes with the models.
+
+    Built without the layout file, so a broken or edited layout file never looks like
+    a model change. Comments and formatting in the model files don't change it.
+    """
+    payload = build_from(project, config, Layout(), created=True)
+    shape = {
+        "metrics": payload["metrics"],
+        "boxes": payload["boxes"],
+        "diagrams": [
+            {k: v for k, v in d.items() if k not in ("positions", "new")}
+            for d in payload["diagrams"]
+        ],
+        "exportDir": None if config.export_dir is None else str(config.export_dir),
+    }
+    text = json.dumps(shape, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def build_from(project: Project, config: StudioConfig, start: Layout, *, created: bool) -> Diagrams:
+    """The payload of ``project`` with every box placed, starting from ``start``.
+
+    ``revision`` and ``layoutPath`` are left empty; ``pending`` is relative to
+    ``start``, ``new`` lists the boxes placed here.
+    """
+    contents = project_diagrams(project, config)
     sizes, edges = place_inputs(project)
-    result = place_layout(
-        existing or Layout(), contents, sizes=sizes, edges=edges, created=existing is None
-    )
+    result = place_layout(start, contents, sizes=sizes, edges=edges, created=created)
     all_edges = _edges(project)
     all_links = _enum_links(project)
     new: dict[str, list[str]] = {}
@@ -222,9 +253,9 @@ def build_diagrams(project: Project, config: StudioConfig, *, shown_path: str) -
         "metrics": dict(METRICS),
         "boxes": _boxes(project, config, sizes, contents[OVERVIEW]),
         "diagrams": diagrams,
-        "revision": revision,
+        "revision": None,
         "pending": _pending(result),
-        "layoutPath": shown_path,
+        "layoutPath": "",
         "projectPath": str(project.settings.input),
         "exportPath": None,
     }
@@ -266,7 +297,8 @@ def save_diagrams(
     if missing or unknown:
         first = f"no diagram {unknown[0]!r} any more" if unknown else f"new diagram {missing[0]!r}"
         raise LayoutConflictError(
-            f"the models changed since the page loaded ({first}); reload the page"
+            f"the models changed since the page loaded ({first}); reload the page",
+            reason="models",
         )
     layout = Layout()
     for name, content in contents.items():
@@ -293,7 +325,8 @@ def checked_positions(positions: object, shown: frozenset[str]) -> dict[str, tup
     if missing or unknown:
         first = f"no box {unknown[0]!r} any more" if unknown else f"new box {missing[0]!r}"
         raise LayoutConflictError(
-            f"the models changed since the page loaded ({first}); reload the page"
+            f"the models changed since the page loaded ({first}); reload the page",
+            reason="models",
         )
     checked: dict[str, tuple[float, float]] = {}
     for key, value in positions.items():

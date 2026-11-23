@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import type { BoxDef, DiagramJson, DrawnBox, Metrics, Position, View } from "../api";
 import { FIT_MARGIN, MAX_ZOOM, MIN_ZOOM } from "../drawing";
@@ -25,6 +25,8 @@ const emit = defineEmits<{
   view: [view: View];
   /** A foreign box was clicked (not dragged): open its entity's group diagram. */
   open: [key: string];
+  /** A box drag started (true) or ended (false): the page holds reloads meanwhile. */
+  dragging: [active: boolean];
 }>();
 
 /** Pointer travel below which a press on a foreign box is a click, not a drag. */
@@ -162,6 +164,14 @@ const dragging = ref<{
   // Set once the pointer travelled CLICK_SLOP: from then on it is a drag.
   moved: boolean;
 } | null>(null);
+watch(
+  () => dragging.value !== null,
+  (active) => emit("dragging", active),
+);
+// Unmounted mid-drag (the diagram switched): the page must not wait for a drag end.
+onBeforeUnmount(() => {
+  if (dragging.value !== null) emit("dragging", false);
+});
 
 // The dragged box is drawn last, on top of the others.
 const ordered = computed(() => {
