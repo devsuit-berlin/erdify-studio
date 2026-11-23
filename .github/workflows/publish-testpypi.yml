@@ -21,8 +21,9 @@ jobs:
   # npm and Python build dependencies run here, without the OIDC token (as in publish.yml).
   build:
     name: Build the distributions
-    # Only `main` is published: the environment can't require reviewers while the
-    # repository is private, so the branch is the gate (dispatch from a branch is a no-op).
+    # Only `main` is published. The gate is the `testpypi` environment's deployment
+    # branch policy (`main` only); this `if` just turns an accidental dispatch from
+    # another branch into a no-op. Keep the build steps in sync with publish.yml.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
@@ -57,7 +58,7 @@ jobs:
       - name: The wheel carries the requested version
         env:
           VERSION: ${{ inputs.version }}
-        run: ls dist/ && ls dist/*.whl | grep -qF "erdify_studio-${VERSION}-"
+        run: ls dist/*.whl | grep -qF "erdify_studio-${VERSION}-"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
@@ -68,7 +69,9 @@ jobs:
     name: Publish to TestPyPI
     needs: [build]
     runs-on: ubuntu-latest
-    # Separate gated environment; needs its own Trusted Publisher on test.pypi.org.
+    if: github.ref == 'refs/heads/main'
+    # Deployment branch policy: `main` only. Needs its own Trusted Publisher on
+    # test.pypi.org (workflow publish-testpypi.yml, environment testpypi).
     environment: testpypi
     permissions:
       id-token: write
