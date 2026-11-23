@@ -13,6 +13,7 @@ jobs:
   # compromised build dependency cannot mint a PyPI credential.
   build:
     name: Build the distributions
+    # Keep in sync with publish-testpypi.yml (the dry run of this path).
     runs-on: ubuntu-latest
     steps:
       - name: Refuse a tag that is not vX.Y.Z
