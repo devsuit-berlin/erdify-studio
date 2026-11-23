@@ -146,8 +146,12 @@ def test_without_relationships_there_are_no_foreign_boxes(tmp_path: Path) -> Non
 
 
 def test_duplicate_layout_keys_are_refused(tmp_path: Path) -> None:
-    models = MODELS.replace('__tablename__ = "lines"', '__tablename__ = "invoices"')
-    with pytest.raises(DuplicateKeyError, match="'Invoice' and 'Line'"):
+    # Invoice and Line share a table, so they are keyed by name; Bill's table is "Invoice".
+    models = MODELS.replace('__tablename__ = "lines"', '__tablename__ = "invoices"') + (
+        '\n\nclass Bill(SQLModel, table=True):\n    __tablename__ = "Invoice"\n'
+        "    id: int = Field(primary_key=True)\n"
+    )
+    with pytest.raises(DuplicateKeyError, match="'Bill' and 'Invoice'"):
         _check(_project(tmp_path, models))
 
 

@@ -100,7 +100,7 @@ def place_project(project: Project, config: StudioConfig) -> PlaceResult:
 
     Raises:
         ProjectError: The project has no entities and erdify's ``allow_empty`` is off.
-        DuplicateKeyError: Two entities have the same layout key.
+        DuplicateKeyError: An entity keyed by its erdify name has another entity's key.
         LayoutVersionError: The layout file is of another version.
         LayoutError: A reserved group name, or a layout file that cannot be read or
             written.
@@ -127,7 +127,7 @@ def place_inputs(project: Project) -> tuple[dict[str, _Size], frozenset[tuple[st
     using it.
 
     Raises:
-        DuplicateKeyError: Two entities have the same layout key.
+        DuplicateKeyError: An entity keyed by its erdify name has another entity's key.
     """
     edges = _key_edges(project) if not project.settings.no_relationships else frozenset()
     return _entity_sizes(project), edges | _enum_edges(project)
