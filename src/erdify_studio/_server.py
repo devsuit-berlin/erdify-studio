@@ -5,13 +5,14 @@ requests to it, so every request must name the server itself as ``Host`` (agains
 DNS rebinding) and, when it has one, as ``Origin``; the API also needs the random
 token of the URL the browser was opened with.
 
-Routes: ``GET /`` and ``GET /assets/*`` (the built frontend), ``GET /api/diagrams``
+Routes: ``GET /`` and ``GET /assets/*`` (the built frontend), ``GET /api/status``
+(model fingerprint, layout revision, load error), ``GET /api/diagrams``
 (``build_studio``), ``PUT /api/layout`` (``save_diagrams``, then the SVG export) and
 ``POST /api/svg`` (``render_download``: one diagram as an SVG download).
 
-The project is loaded again for every API request, so a reload after a ``git
-checkout`` or a model change shows the current models instead of treating their
-positions as stale.
+A watcher thread re-loads the project about every second and every API request reads
+its snapshot, so a model change or a ``git checkout`` shows up without restarting;
+a failed load keeps the last good project (``GET /api/status`` reports the error).
 """
 
 from __future__ import annotations
@@ -20,7 +21,9 @@ import json
 import logging
 import secrets
 import threading
+import time
 from collections.abc import Callable
+from dataclasses import dataclass, replace
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -31,7 +34,7 @@ import erdify
 from erdify import Project
 
 from erdify_studio._config import StudioConfig
-from erdify_studio._diagrams import save_diagrams
+from erdify_studio._diagrams import layout_revision, model_fingerprint, save_diagrams
 from erdify_studio._errors import LayoutConflictError, PositionsError, StudioError
 from erdify_studio._export import build_studio, export_project, render_download
 
@@ -68,8 +71,25 @@ _TYPES = {
 }
 
 
+@dataclass(frozen=True)
+class Snapshot:
+    """The project as the API serves it: the last one that loaded, and why a newer
+    load failed (``error``; None when the last load succeeded)."""
+
+    project: Project
+    config: StudioConfig
+    fingerprint: str
+    error: str | None = None
+
+
 class StudioServer(ThreadingHTTPServer):
     """The studio's HTTP server for one project.
+
+    A watcher thread re-loads the project while the server runs (every
+    ``interval()`` seconds: at least ``min_interval``, at least twice the last load's
+    duration) and keeps a ``Snapshot``; every API request reads the snapshot. A load
+    that fails keeps the last good project and records the error, so a half-typed
+    model file never blanks the canvas.
 
     Attributes:
         token: The secret the API requires in ``X-Studio-Token``.
@@ -84,12 +104,21 @@ class StudioServer(ThreadingHTTPServer):
         port: int,
         static_dir: Path,
         shown_path: str,
+        min_interval: float = 1.0,
     ) -> None:
         self.load = load
         self.static_dir = static_dir.resolve()
         self.shown_path = shown_path
         self.token = secrets.token_urlsafe(32)
         self.save_lock = threading.Lock()
+        self.min_interval = min_interval
+        self._snapshot_lock = threading.Lock()
+        self._stop = threading.Event()
+        self._watcher: threading.Thread | None = None
+        started = time.monotonic()
+        project, config = load()  # the first load must succeed, as `check` would
+        self._snapshot = Snapshot(project, config, model_fingerprint(project, config))
+        self._load_seconds = time.monotonic() - started
         super().__init__(("127.0.0.1", port), _Handler)
 
     @property
@@ -102,6 +131,62 @@ class StudioServer(ThreadingHTTPServer):
         """The URL that opens the canvas, token included."""
         return f"http://127.0.0.1:{self.port}/?token={self.token}"
 
+    def snapshot(self) -> Snapshot:
+        """The project the API serves."""
+        with self._snapshot_lock:
+            return self._snapshot
+
+    def interval(self) -> float:
+        """Seconds between two loads: ``min_interval``, or twice the last load's time."""
+        return max(self.min_interval, 2 * self._load_seconds)
+
+    def refresh(self) -> None:
+        """Load the project once; on failure keep the last good one and record why."""
+        started = time.monotonic()
+        try:
+            project, config = self.load()
+            fingerprint = model_fingerprint(project, config)
+        except _LOAD_ERRORS as e:
+            logger.info(f"cannot load the project, showing the last good state: {e}")
+            self._set(replace(self.snapshot(), error=str(e)))
+        except Exception:
+            logger.exception("cannot load the project, showing the last good state")
+            self._set(replace(self.snapshot(), error="internal error (see the terminal)"))
+        else:
+            self._set(Snapshot(project, config, fingerprint))
+        finally:
+            self._load_seconds = time.monotonic() - started
+
+    def serve_forever(self, poll_interval: float = 0.5) -> None:
+        """Serve, with the watcher thread running until ``shutdown``."""
+        self._stop.clear()
+        self._watcher = threading.Thread(
+            target=self._watch, name="erdify-studio-watch", daemon=True
+        )
+        self._watcher.start()
+        try:
+            super().serve_forever(poll_interval)
+        finally:
+            self._stop_watcher()
+
+    def server_close(self) -> None:
+        self._stop_watcher()
+        super().server_close()
+
+    def _watch(self) -> None:
+        while not self._stop.wait(self.interval()):
+            self.refresh()
+
+    def _stop_watcher(self) -> None:
+        self._stop.set()
+        if self._watcher is not None and self._watcher is not threading.current_thread():
+            self._watcher.join()
+            self._watcher = None
+
+    def _set(self, snapshot: Snapshot) -> None:
+        with self._snapshot_lock:
+            self._snapshot = snapshot
+
 
 def start_server(
     load: ProjectLoader,
@@ -109,20 +194,29 @@ def start_server(
     port: int = 0,
     static_dir: Path | None = None,
     shown_path: str,
+    min_interval: float = 1.0,
 ) -> StudioServer:
     """Bind a studio server on 127.0.0.1 (not serving yet).
 
     Args:
-        load: Loads the project (``strict=True``) and its studio settings; called for
-            every API request.
+        load: Loads the project (``strict=True``) and its studio settings; called once
+            here, then by the watcher while the server runs.
         port: The port; 0 picks a free one.
         static_dir: The built frontend to serve (default: ``STATIC_DIR``).
         shown_path: The layout file's path as the UI shows it.
+        min_interval: Shortest time between two loads, in seconds.
 
     Raises:
         OSError: The port cannot be bound (e.g. it is in use).
+        StudioError, erdify errors: The first load failed.
     """
-    return StudioServer(load, port=port, static_dir=static_dir or STATIC_DIR, shown_path=shown_path)
+    return StudioServer(
+        load,
+        port=port,
+        static_dir=static_dir or STATIC_DIR,
+        shown_path=shown_path,
+        min_interval=min_interval,
+    )
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -139,6 +233,9 @@ class _Handler(BaseHTTPRequestHandler):
         if path == "/api/diagrams":
             if self._authorized():
                 self._diagrams()
+        elif path == "/api/status":
+            if self._authorized():
+                self._status()
         elif path == "/api/layout":
             self._error(HTTPStatus.METHOD_NOT_ALLOWED, "method not allowed")
         elif path.startswith("/api/"):
@@ -218,9 +315,23 @@ class _Handler(BaseHTTPRequestHandler):
             return None
         return file
 
+    def _status(self) -> None:
+        """What changed: the model fingerprint, the layout file's revision, a load error."""
+        snapshot = self.server.snapshot()
+        try:
+            revision = layout_revision(snapshot.config.layout)
+        except OSError as e:
+            self._error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
+            return
+        self._json(
+            HTTPStatus.OK,
+            {"model": snapshot.fingerprint, "revision": revision, "error": snapshot.error},
+        )
+
     def _diagrams(self) -> None:
         try:
-            project, config = self.server.load()
+            snapshot = self.server.snapshot()
+            project, config = snapshot.project, snapshot.config
             diagrams = build_studio(project, config, shown_path=self.server.shown_path)
         except _LOAD_ERRORS as e:
             self._error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
@@ -248,7 +359,8 @@ class _Handler(BaseHTTPRequestHandler):
             return
         try:
             with self.server.save_lock:
-                project, config = self.server.load()
+                snapshot = self.server.snapshot()
+                project, config = snapshot.project, snapshot.config
                 revision = save_diagrams(project, config, payload["diagrams"], payload["revision"])
                 exported = self._export(project, config)
         except PositionsError as e:
@@ -273,7 +385,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._error(HTTPStatus.BAD_REQUEST, 'expected {"diagram": string, "positions": {...}}')
             return
         try:
-            project, config = self.server.load()
+            snapshot = self.server.snapshot()
+            project, config = snapshot.project, snapshot.config
             name, svg = render_download(project, config, payload["diagram"], payload["positions"])
         except PositionsError as e:
             self._error(HTTPStatus.BAD_REQUEST, str(e))

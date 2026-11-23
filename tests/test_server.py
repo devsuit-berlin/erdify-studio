@@ -359,23 +359,28 @@ class Order(SQLModel, table=True):
 """
 
 
-def test_a_reload_shows_changed_models(studio: Studio) -> None:
+def test_a_refresh_shows_changed_models(studio: Studio) -> None:
     (studio.root / "shop" / "models.py").write_text(MODELS + ORDER)
+    assert "orders" not in _positions(studio)  # the snapshot until the next tick
+    studio.server.refresh()
     assert "orders" in _positions(studio)
 
 
 def test_saving_from_a_page_with_old_models_is_409(studio: Studio) -> None:
     diagrams = _diagrams(studio)
     (studio.root / "shop" / "models.py").write_text(MODELS + ORDER)
+    studio.server.refresh()
     status, _, body = studio.put_layout({"revision": None, "diagrams": diagrams})
     assert (status, "models changed" in _json(body)["error"]) == (409, True)
     assert not (studio.root / SHOWN).exists()
 
 
-def test_a_parse_error_after_start_is_500(studio: Studio) -> None:
+def test_a_parse_error_keeps_the_last_good_state(studio: Studio) -> None:
+    before = _positions(studio)
     (studio.root / "shop" / "models.py").write_text("class Broken(:\n")
-    status, _, body = studio.request("GET", "/api/diagrams")
-    assert (status, "error" in _json(body)) == (500, True)
+    studio.server.refresh()
+    assert _positions(studio) == before
+    assert "Broken" in _status(studio)["error"] or "parse" in _status(studio)["error"]
 
 
 def _crash(*args: object, **kwargs: object) -> None:
@@ -440,6 +445,7 @@ def test_a_failed_export_still_saves_the_layout(exporting: Studio) -> None:
         '[tool.erdify]\ninclude = ["**/models.py"]\n[tool.erdify-studio]\n'
         'export_dir = "erd"\ngroup_by = "schema"\n'
     )
+    exporting.server.refresh()
     status, _, body = exporting.put_layout({"revision": None, "diagrams": _diagrams(exporting)})
     result = _json(body)
     path = exporting.root / SHOWN
@@ -485,8 +491,8 @@ def test_post_svg_errors(studio: Studio, payload: object, status: int) -> None:
     assert _post_svg(studio, payload)[0] == status
 
 
-def test_post_svg_with_unreadable_models_is_500(studio: Studio) -> None:
-    (studio.root / "shop" / "models.py").write_text("class Broken(:\n")
+def test_post_svg_with_an_unreadable_layout_file_is_500(studio: Studio) -> None:
+    (studio.root / SHOWN).write_text("<<<<<<< HEAD\n")
     status, _, body = _post_svg(studio, {"diagram": OVERVIEW, "positions": {}})
     assert (status, "error" in _json(body)) == (500, True)
 
@@ -566,3 +572,125 @@ def test_a_refused_request_closes_cleanly(studio: Studio, method: str, path: str
                 break
             received += chunk
     assert received.startswith(b"HTTP/1.0 403") or received.startswith(b"HTTP/1.1 403")
+
+
+# --- watcher and status (#7) -------------------------------------------------------
+
+
+def _status(studio: Studio) -> dict[str, Any]:
+    status, _, body = studio.request("GET", "/api/status")
+    assert status == 200
+    result: dict[str, Any] = _json(body)
+    return result
+
+
+def test_status(studio: Studio) -> None:
+    result = _status(studio)
+    assert set(result) == {"model", "revision", "error"}
+    assert (result["revision"], result["error"]) == (None, None)
+    assert len(result["model"]) == 64
+
+
+def test_status_requires_the_token(studio: Studio) -> None:
+    assert studio.request("GET", "/api/status", token=False)[0] == 403
+
+
+def test_a_refresh_changes_the_model_fingerprint(studio: Studio) -> None:
+    before = _status(studio)["model"]
+    (studio.root / "shop" / "models.py").write_text(MODELS + ORDER)
+    studio.server.refresh()
+    assert _status(studio)["model"] != before
+
+
+def test_fixing_the_file_clears_the_error(studio: Studio) -> None:
+    models = studio.root / "shop" / "models.py"
+    models.write_text("class Broken(:\n")
+    studio.server.refresh()
+    assert _status(studio)["error"]
+    models.write_text(MODELS)
+    studio.server.refresh()
+    assert _status(studio)["error"] is None
+
+
+def test_deleting_every_model_keeps_the_last_good_state(studio: Studio) -> None:
+    before = _status(studio)["model"]
+    (studio.root / "shop" / "models.py").write_text("")
+    studio.server.refresh()
+    result = _status(studio)
+    assert (result["model"], "no entities" in result["error"]) == (before, True)
+
+
+def test_an_unexpected_load_error_keeps_the_last_good_state(
+    studio: Studio, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    before = _status(studio)["model"]
+    monkeypatch.setattr(studio.server, "load", _crash)
+    studio.server.refresh()
+    result = _status(studio)
+    assert (result["model"], result["error"]) == (before, "internal error (see the terminal)")
+
+
+def test_requests_read_the_snapshot_not_the_files(
+    studio: Studio, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[int] = []
+    real = studio.server.load
+
+    def counting() -> Any:
+        calls.append(1)
+        return real()
+
+    monkeypatch.setattr(studio.server, "load", counting)
+    _status(studio)
+    _payload(studio)
+    assert calls == []
+
+
+def test_save_during_a_load_error_uses_the_last_good_state(studio: Studio) -> None:
+    diagrams = _diagrams(studio)
+    (studio.root / "shop" / "models.py").write_text("class Broken(:\n")
+    studio.server.refresh()
+    status, _, _ = studio.put_layout({"revision": None, "diagrams": diagrams})
+    assert status == 200 and (studio.root / SHOWN).is_file()
+
+
+def test_the_interval_is_at_least_twice_the_parse_time(tmp_path: Path) -> None:
+    root = _project(tmp_path / "project")
+    load = _loader(root)
+
+    def slow() -> Any:
+        time.sleep(0.05)
+        return load()
+
+    server = start_server(slow, static_dir=_static(tmp_path), shown_path=SHOWN, min_interval=0.01)
+    try:
+        server.refresh()
+        assert server.interval() >= 0.1
+    finally:
+        server.server_close()
+
+
+def test_the_watcher_follows_the_files(tmp_path: Path) -> None:
+    root = _project(tmp_path / "project")
+    server = start_server(
+        _loader(root), static_dir=_static(tmp_path), shown_path=SHOWN, min_interval=0.05
+    )
+    thread = threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True)
+    thread.start()
+    try:
+        before = server.snapshot().fingerprint
+        (root / "shop" / "models.py").write_text(MODELS + ORDER)
+        deadline = time.monotonic() + 5
+        while server.snapshot().fingerprint == before and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert server.snapshot().fingerprint != before
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+    assert not any(t.name == "erdify-studio-watch" for t in threading.enumerate())
+
+
+def test_status_with_an_unreadable_layout_file_is_500(studio: Studio) -> None:
+    (studio.root / SHOWN).mkdir()  # a folder where the layout file should be
+    assert studio.request("GET", "/api/status")[0] == 500
