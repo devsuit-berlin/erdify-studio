@@ -19,6 +19,24 @@ With `export_dir` set and the layout up to date, `check` also exits 1 when an ex
 SVG is missing, out of date (e.g. a new column made a box taller) or stale (a group
 that no longer exists), one line each, and suggests `erdify-studio export`.
 
+In GitHub Actions (any CI works the same way — install, then run `check`):
+
+```yaml
+jobs:
+  erd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: pip install erdify-studio          # "erdify-studio[sql]" for SQL DDL
+      - run: erdify-studio check ./src          # the path erdify reads (default: .)
+```
+
+erdify reads the model files as source text, without importing them, so the job needs
+neither your project's dependencies nor a database.
+
 With [pre-commit](https://pre-commit.com):
 
 ```yaml

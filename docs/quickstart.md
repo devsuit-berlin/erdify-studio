@@ -2,19 +2,21 @@
 
 In a project erdify already reads (`[tool.erdify]` in `pyproject.toml`):
 
-```bash
-erdify-studio                     # 1. opens the canvas in your browser
-```
+1. Open the canvas in your browser:
+
+    ```bash
+    erdify-studio
+    ```
 
 2. Drag the boxes into the arrangement your team reads; switch between the overview and
    the group diagrams on the left.
 3. **Save** (Ctrl/⌘+S) writes `erdify-layout.json` next to `pyproject.toml`.
-4. Commit it, and add the check to CI or pre-commit:
+4. Commit it, and add the check to CI or pre-commit ([how](usage/ci.md)):
 
-```bash
-erdify-studio check               # exit 1 when a new table has no position yet
-erdify-studio place --auto        # place new tables without opening the browser
-```
+    ```bash
+    erdify-studio check            # exit 1 when a new table has no position yet
+    erdify-studio place --auto     # place new tables without opening the browser
+    ```
 
 Optional: set `export_dir` (see [Configuration](configuration.md)) to commit the diagrams
 as SVG; Save and `erdify-studio export` keep them current, and `check` fails when they

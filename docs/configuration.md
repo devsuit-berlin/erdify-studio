@@ -15,6 +15,11 @@ classes of one table) are keyed by erdify's entity name instead, e.g.
 `billing.models.Address`; when such a namesake appears later, the first one's key changes
 once. Enums are keyed `enum:<name>`.
 
+Relative `layout` and `export_dir` paths resolve from the folder of `pyproject.toml`
+(without a `pyproject.toml`, from the working directory). An unknown key in
+`[tool.erdify-studio]` is logged as a warning and ignored; a value of the wrong type, or
+a `group_by` that isn't one of the five, makes every command exit 2 with a message.
+
 erdify's own settings (`[tool.erdify]`: `include`, `sources`, `exclude`, `strict`,
 `no_enums`, `no_relationships`, `allow_empty`, …) decide which entities exist; see
 [erdify's documentation](https://erdify.devsuit.io/). erdify-studio reads the same

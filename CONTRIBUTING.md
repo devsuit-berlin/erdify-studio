@@ -56,6 +56,13 @@ gaps) belongs there too. New npm packages are pinned exactly and must be at leas
 days old (`npm install --save-exact --before=<date>`); the shipped page must load
 nothing from the network (`poe check-static`).
 
+## Docs
+
+The site (`mkdocs.yml`, pages in `docs/`; `docs/design/` and `docs/styleguide/` are
+internal and not published) is built with `uv run --group docs poe docs` into `site/`,
+or served with live reload by `uv run --group docs mkdocs serve`. CI builds it with
+`--strict` on every PR and deploys it to GitHub Pages from `main`.
+
 ## Pull requests
 
 - One issue per PR; reference it (`Closes #12`).

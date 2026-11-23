@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version-file: .python-version
-      # --strict: a broken link or a page missing from the nav fails the PR.
+      # --strict: a broken internal link fails the PR.
       - name: Build the site
         run: uv run --frozen --group docs mkdocs build --strict
       - name: Upload the Pages artifact
@@ -38,6 +38,10 @@ jobs:
     if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
+    # One deploy at a time, in order: an older build must not overwrite a newer site.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write
