@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Documentation site (MkDocs Material, GitHub Pages): installation, quickstart, the
+  canvas, `check` in CI and pre-commit, `place --auto`, `export`, configuration and the
+  layout file.
 - Live reload: studio re-parses the project about every second (slower for large
   projects) and the canvas follows model edits without losing unsaved positions — new
   tables are placed next to the arrangement and marked NEW, removed ones disappear,
