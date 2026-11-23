@@ -21,6 +21,9 @@ jobs:
   # npm and Python build dependencies run here, without the OIDC token (as in publish.yml).
   build:
     name: Build the distributions
+    # Only `main` is published: the environment can't require reviewers while the
+    # repository is private, so the branch is the gate (dispatch from a branch is a no-op).
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
       SETUPTOOLS_SCM_PRETEND_VERSION: ${{ inputs.version }}
@@ -54,7 +57,7 @@ jobs:
       - name: The wheel carries the requested version
         env:
           VERSION: ${{ inputs.version }}
-        run: ls dist/ && ls dist/*.whl | grep -q "erdify_studio-${VERSION}-"
+        run: ls dist/ && ls dist/*.whl | grep -qF "erdify_studio-${VERSION}-"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
