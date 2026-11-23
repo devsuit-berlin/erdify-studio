@@ -195,3 +195,12 @@ def test_the_viewbox_covers_every_box_and_the_self_loop(tmp_path: Path) -> None:
         >= max(customers["width"] + 56, 840 + payload["boxes"]["enum:Status"]["width"]) + 40
     )
     assert re.fullmatch(r"\d+(\.\d+)?", ET.fromstring(_render(payload)).get("width", ""))
+
+
+def test_clip_ids_differ_between_diagrams(tmp_path: Path) -> None:
+    """Several SVGs inlined into one HTML page share one id space."""
+    payload = _payload(_project(tmp_path))
+    ids = [
+        set(re.findall(r'<clipPath id="([^"]+)"', _render(payload, n))) for n in (OVERVIEW, "core")
+    ]
+    assert ids[0] and ids[1] and not ids[0] & ids[1]

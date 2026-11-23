@@ -393,3 +393,35 @@ def test_studio_counts_outdated_svgs(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 def test_studio_counts_no_svgs_while_the_layout_is_out_of_date(tmp_path: Path) -> None:
     assert _studio(_project(tmp_path, place=False))["pending"]["svgs"] == 0
+
+
+# --- review fixes ------------------------------------------------------------------
+
+
+def test_a_crlf_checkout_is_current(tmp_path: Path) -> None:
+    """git with core.autocrlf=true (Windows CI) checks the SVGs out with CRLF."""
+    root = _project(tmp_path)
+    _export(root)
+    for path in (root / "docs" / "erd").rglob("*.svg"):
+        path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+    assert _check(root) == []
+    assert _export(root).written == ()
+
+
+def test_a_differently_cased_file_is_not_deleted_as_stale(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    _export(root)
+    groups = root / "docs" / "erd" / "groups"
+    (groups / "core.svg").rename(groups / "Core.svg")
+    result = _export(root)
+    assert PurePosixPath("groups/Core.svg") not in result.deleted
+    assert {p.name.lower() for p in groups.glob("*")} >= {"core.svg", "billing.svg"}
+
+
+def test_only_lowercase_svg_files_are_owned(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    groups = root / "docs" / "erd" / "groups"
+    groups.mkdir(parents=True)
+    (groups / "photo.SVG").write_text("x")
+    assert _export(root).deleted == ()
+    assert (groups / "photo.SVG").read_text() == "x"

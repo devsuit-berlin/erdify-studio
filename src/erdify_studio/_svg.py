@@ -58,6 +58,7 @@ def format_number(value: float) -> str:
     return "0" if text in ("-0", "") else text
 
 
+_NOT_ID = re.compile(r"[^A-Za-z0-9_-]+")
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?(?:e[-+]?\d+)?")
 
 
@@ -116,8 +117,11 @@ def render_svg(
         )
     font_size = metrics["charWidth"] / _FONT_ADVANCE
     foreign = set(diagram["foreign"])
+    # ids are per page: several SVGs inlined into one HTML page must not share them
+    prefix = _NOT_ID.sub("-", diagram["name"]).strip("-") or "diagram"
     for i, key in enumerate(sorted(rects)):
-        out += _box(key, boxes[key], rects[key], metrics, font_size, key in foreign, i)
+        clip = f"clip-{prefix}-{i}"
+        out += _box(key, boxes[key], rects[key], metrics, font_size, key in foreign, clip)
     out.append("</svg>")
     return "\n".join(out) + "\n"
 
@@ -180,7 +184,7 @@ def _box(
     metrics: Mapping[str, int],
     font_size: float,
     foreign: bool,
-    index: int,
+    clip: str,
 ) -> list[str]:
     n = format_number
     w, h = n(rect.width), n(rect.height)
@@ -193,7 +197,6 @@ def _box(
     body = _BG_MUTED if foreign else _BG
     head = _BG_MUTED if foreign else _ENUM_HEADER if box["kind"] == "enum" else _BG_ACCENTED
     title = _TEXT_MUTED if foreign else _TEXT_HIGHLIGHTED
-    clip = f"clip-{index}"
     out = [
         f'  <g transform="translate({n(rect.x)} {n(rect.y)})" data-key={quoteattr(key)} '
         f'font-family={quoteattr(_FONT_FAMILY)} font-size="{n(font_size)}">',

@@ -122,6 +122,7 @@ def export_project(project: Project, config: StudioConfig) -> ExportResult:
     """
     directory = _export_dir(config)
     files = export_files(project, config)
+    _fix_case(directory, files)
     written: list[PurePosixPath] = []
     for relative, text in sorted(files.items()):
         path = directory / relative
@@ -187,19 +188,38 @@ def _export_dir(config: StudioConfig) -> Path:
 
 
 def _read(path: Path) -> str | None:
+    """The file's text with ``\n`` line endings; None when it doesn't exist.
+
+    git with ``core.autocrlf`` (the default on Windows runners) checks the SVGs out
+    with CRLF; they are still current.
+    """
     try:
         with path.open(encoding="utf-8", newline="") as file:
-            return file.read()
+            return file.read().replace("\r\n", "\n")
     except FileNotFoundError:
         return None
 
 
-def _stale(directory: Path, files: dict[PurePosixPath, str]) -> list[PurePosixPath]:
+def _owned(directory: Path) -> list[Path]:
+    """The ``groups/*.svg`` files in ``directory``: suffix compared case-sensitively,
+    so a user's ``photo.SVG`` is never the export's (glob ignores case on Windows)."""
     groups = directory / _GROUPS
     if not groups.is_dir():
         return []
-    return sorted(
-        _GROUPS / path.name
-        for path in groups.glob("*.svg")
-        if path.is_file() and _GROUPS / path.name not in files
-    )
+    return sorted(p for p in groups.iterdir() if p.suffix == ".svg" and p.is_file())
+
+
+def _stale(directory: Path, files: dict[PurePosixPath, str]) -> list[PurePosixPath]:
+    # Compared case-insensitively: on macOS and Windows `Core.svg` *is* `core.svg`,
+    # so deleting it as stale would delete the file just compared.
+    wanted = {path.name.lower() for path in files}
+    return [_GROUPS / p.name for p in _owned(directory) if p.name.lower() not in wanted]
+
+
+def _fix_case(directory: Path, files: dict[PurePosixPath, str]) -> None:
+    """Rename ``groups/Core.svg`` to the exported ``groups/core.svg``."""
+    names = {path.name.lower(): path.name for path in files if path.parent == _GROUPS}
+    for path in _owned(directory):
+        name = names.get(path.name.lower())
+        if name is not None and name != path.name:
+            path.rename(path.with_name(name))

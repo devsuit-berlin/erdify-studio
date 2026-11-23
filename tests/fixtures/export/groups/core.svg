@@ -17,18 +17,18 @@
     <path d="M 264 51.45 a 4 4 0 1 0 -8 0 a 4 4 0 1 0 8 0" fill="#f8fafc" stroke="#62748e" stroke-width="1.25"/>
   </g>
   <g transform="translate(420 40)" data-key="billing.invoices" font-family='"JetBrains Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace' font-size="13.33">
-    <clipPath id="clip-0"><rect width="200" height="32" rx="6"/></clipPath>
+    <clipPath id="clip-core-0"><rect width="200" height="32" rx="6"/></clipPath>
     <rect width="200" height="32" rx="6" fill="#f8fafc"/>
-    <g clip-path="url(#clip-0)">
+    <g clip-path="url(#clip-core-0)">
       <rect width="200" height="32" fill="#f8fafc"/>
       <text x="16" y="20.67" font-weight="700" fill="#62748e">billing.invoices</text>
     </g>
     <rect width="200" height="32" rx="6" fill="none" stroke="#cad5e2" stroke-width="1" stroke-dasharray="4 3"/>
   </g>
   <g transform="translate(0 0)" data-key="core.customers" font-family='"JetBrains Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace' font-size="13.33">
-    <clipPath id="clip-1"><rect width="240" height="98" rx="6"/></clipPath>
+    <clipPath id="clip-core-1"><rect width="240" height="98" rx="6"/></clipPath>
     <rect width="240" height="98" rx="6" fill="#ffffff"/>
-    <g clip-path="url(#clip-1)">
+    <g clip-path="url(#clip-core-1)">
       <rect width="240" height="32" fill="#e2e8f0"/>
       <text x="16" y="20.67" font-weight="700" fill="#0f172b">core.customers</text>
       <text x="16" y="47.67" font-weight="700" fill="#615fff">PK</text>
