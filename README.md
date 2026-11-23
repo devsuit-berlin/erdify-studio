@@ -10,7 +10,7 @@ Arrange your [erdify](https://github.com/devsuit-berlin/erdify) ERDs by drag and
 commit the layout to your repo and check in CI that it stays up to date.
 
 > **Status: pre-alpha.** `check`, `place --auto`, the canvas (overview and group
-> diagrams) and SVG export work; the first release is next. Progress is tracked in the
+> diagrams, live reload) and SVG export work; the first release is next. Progress is tracked in the
 > [v0.1.0 milestone](https://github.com/devsuit-berlin/erdify-studio/milestone/1).
 
 erdify generates ERDs from your code (SQLModel, SQLAlchemy, Django, Pydantic,
@@ -62,9 +62,13 @@ erdify's own, with crow's-foot ends.
   passes afterwards; entries for tables or groups that no longer exist are dropped.
 - Boxes without a position are placed like `place --auto` does and marked **NEW** until
   you save.
-- If the layout file changed, or tables were added or removed, after the page loaded
-  (a `git checkout`, another tab), Save refuses instead of overwriting: reload the
-  page, which reads both again.
+- **Live reload**: edit your models while studio is open and the canvas follows within
+  about a second. New tables are placed next to your arrangement and marked NEW,
+  removed ones disappear (and leave the layout file on the next Save), boxes whose
+  columns change keep their position. Unsaved drags are never lost. While a model file
+  can't be loaded (half-typed), studio keeps the last good diagram and says why.
+- If the layout file changes on disk (a `git checkout`, another tab), studio says so;
+  Save then refuses instead of overwriting it: reload the page.
 - Closing the tab with unsaved changes asks first.
 
 Like `check`, it exits 2 without starting when the canvas is not built (a source
