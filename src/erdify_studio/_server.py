@@ -5,7 +5,7 @@ requests to it, so every request must name the server itself as ``Host`` (agains
 DNS rebinding) and, when it has one, as ``Origin``; the API also needs the random
 token of the URL the browser was opened with.
 
-Routes: ``GET /`` and ``GET /assets/*`` (the built frontend), ``GET /api/overview``
+Routes: ``GET /`` and ``GET /assets/*`` (the built frontend), ``GET /api/diagrams``
 (``build_diagrams``) and ``PUT /api/layout`` (``save_diagrams``).
 
 The project is loaded again for every API request, so a reload after a ``git
@@ -132,9 +132,9 @@ class _Handler(BaseHTTPRequestHandler):
         if not self._trusted():
             return
         path = self.path.split("?", 1)[0]
-        if path == "/api/overview":
+        if path == "/api/diagrams":
             if self._authorized():
-                self._overview()
+                self._diagrams()
         elif path == "/api/layout":
             self._error(HTTPStatus.METHOD_NOT_ALLOWED, "method not allowed")
         elif path.startswith("/api/"):
@@ -204,17 +204,17 @@ class _Handler(BaseHTTPRequestHandler):
             return None
         return file
 
-    def _overview(self) -> None:
+    def _diagrams(self) -> None:
         try:
             project, config = self.server.load()
-            overview = build_diagrams(project, config, shown_path=self.server.shown_path)
+            diagrams = build_diagrams(project, config, shown_path=self.server.shown_path)
         except _LOAD_ERRORS as e:
             self._error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
             return
         except Exception:
             self._internal_error()
             return
-        self._json(HTTPStatus.OK, overview)
+        self._json(HTTPStatus.OK, diagrams)
 
     def _save(self) -> None:
         payload = self._body()
