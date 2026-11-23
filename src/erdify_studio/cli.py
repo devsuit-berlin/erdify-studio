@@ -13,10 +13,11 @@ from pathlib import Path
 import erdify
 
 from erdify_studio import __version__, _server
-from erdify_studio._check import check_project
+from erdify_studio._check import Problem, check_project
 from erdify_studio._config import StudioConfig, load_config
 from erdify_studio._diagrams import build_diagrams
 from erdify_studio._errors import StudioError
+from erdify_studio._export import OutOfDateLayoutError, check_exports, export_project
 from erdify_studio._place import place_project
 
 #: Exit code of a failed check (out-of-date layout).
@@ -25,8 +26,9 @@ EXIT_CHECK_FAILED = 1
 EXIT_ERROR = 2
 
 #: What ``main`` treats as the start of a command line that names no command.
-_TOP_LEVEL = frozenset({"check", "place", "open", "-h", "--help", "--version"})
+_TOP_LEVEL = frozenset({"check", "place", "export", "open", "-h", "--help", "--version"})
 
+_EXPORT_HINT = "hint: run `erdify-studio export` to write the SVGs"
 _HINT = (
     "hint: run `erdify-studio place --auto` to place new entities and drop stale entries, "
     "or open `erdify-studio` to arrange them"
@@ -66,11 +68,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_path(open_)
     check = commands.add_parser(
         "check",
-        help="exit 1 if the committed layout is out of date",
+        help="exit 1 if the committed layout or SVGs are out of date",
         description=(
             "Exit 1 if an entity or foreign box has no position, or the layout file holds "
-            "stale entries or diagrams; print one line per problem. Exit 0 without output "
-            "when the layout matches the models."
+            "stale entries or diagrams; with export_dir set, also if an exported SVG is "
+            "missing, out of date or stale. Print one line per problem. Exit 0 without "
+            "output when the layout and the SVGs match the models."
         ),
     )
     _add_path(check)
@@ -91,6 +94,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="place without opening the canvas (required)",
     )
     _add_path(place)
+    export = commands.add_parser(
+        "export",
+        help="write one SVG per diagram to export_dir",
+        description=(
+            "Write overview.svg and groups/<group>.svg to [tool.erdify-studio] "
+            "export_dir, byte-identical on every machine, and delete groups/*.svg of "
+            "groups that no longer exist. Exits 1 while the layout file is out of date."
+        ),
+    )
+    _add_path(export)
     return parser
 
 
@@ -126,6 +139,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _open(args.path, port=args.port, browser=args.browser)
         if args.command == "place":
             return _place(args.path)
+        if args.command == "export":
+            return _export(args.path)
         return _check(args.path)
     except (
         StudioError,
@@ -157,15 +172,45 @@ def _load(path: Path) -> tuple[erdify.Project, StudioConfig]:
 def _check(path: Path) -> int:
     project, config = _load(path)
     problems = check_project(project, config)
+    if problems is None or problems:
+        _print_layout_problems(config, problems)
+        return EXIT_CHECK_FAILED
+    if config.export_dir is None:
+        return 0
+    svgs = check_exports(project, config)
+    if not svgs:
+        return 0
+    for svg in svgs:
+        print(svg.message(_display(svg.path)), file=sys.stderr)
+    print(_EXPORT_HINT, file=sys.stderr)
+    return EXIT_CHECK_FAILED
+
+
+def _print_layout_problems(config: StudioConfig, problems: list[Problem] | None) -> None:
     shown = _display(config.layout)
     if problems is None:
         print(f"{shown}: no layout file yet", file=sys.stderr)
-    elif not problems:
-        return 0
     for problem in problems or ():
         print(f"{shown}: {problem}", file=sys.stderr)
     print(_HINT, file=sys.stderr)
-    return EXIT_CHECK_FAILED
+
+
+def _export(path: Path) -> int:
+    project, config = _load(path)
+    try:
+        result = export_project(project, config)
+    except OutOfDateLayoutError as e:
+        _print_layout_problems(config, e.problems)
+        return EXIT_CHECK_FAILED
+    directory = config.export_dir
+    assert directory is not None  # export_project raised otherwise
+    for relative in result.written:
+        print(f"{_display(directory / relative)}: wrote")
+    for relative in result.deleted:
+        print(f"{_display(directory / relative)}: deleted")
+    if not result.written and not result.deleted:
+        print(f"{_display(directory)}: SVGs up to date")
+    return 0
 
 
 def _place(path: Path) -> int:

@@ -18,6 +18,7 @@ from erdify_studio._export import (
     export_project,
     slug,
 )
+from erdify_studio.cli import main
 
 MODELS = """\
 from sqlmodel import Field, SQLModel
@@ -254,3 +255,106 @@ def test_export_is_byte_identical_from_a_copy(tmp_path: Path) -> None:
     _export(copy)
     for name in FILES:
         assert (copy / "docs/erd" / name).read_bytes() == (root / "docs/erd" / name).read_bytes()
+
+
+# --- CLI ---------------------------------------------------------------------------
+
+
+def _run(argv: list[str], capsys: pytest.CaptureFixture[str]) -> tuple[int, str, str]:
+    code = main(argv)
+    out, err = capsys.readouterr()
+    return code, out, err
+
+
+def test_export_is_a_command(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        main(["--help"])
+    assert "export" in capsys.readouterr().out
+
+
+def test_cli_export_lists_what_it_wrote(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path)
+    monkeypatch.chdir(root)
+    (root / "docs" / "erd" / "groups").mkdir(parents=True)
+    (root / "docs" / "erd" / "groups" / "gone.svg").write_text("x")
+    assert _run(["export"], capsys)[:2] == (
+        0,
+        "docs/erd/groups/billing.svg: wrote\n"
+        "docs/erd/groups/core.svg: wrote\n"
+        "docs/erd/overview.svg: wrote\n"
+        "docs/erd/groups/gone.svg: deleted\n",
+    )
+    assert _run(["export", "."], capsys)[:2] == (0, "docs/erd: SVGs up to date\n")
+
+
+def test_cli_export_refuses_an_out_of_date_layout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, place=False)
+    monkeypatch.chdir(root)
+    code, _, err = _run(["export"], capsys)
+    assert code == 1
+    assert "erdify-layout.json: no layout file yet" in err
+    assert err.rstrip().endswith("or open `erdify-studio` to arrange them")
+
+
+@pytest.mark.parametrize(
+    ("studio", "message"),
+    [("", "set [tool.erdify-studio] export_dir to export SVGs"), ("collision", "'Sales'")],
+)
+def test_cli_export_errors_exit_2(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    studio: str,
+    message: str,
+) -> None:
+    if studio == "collision":
+        models = (
+            MODELS.replace('"schema": "core"', '"schema": "Sales"')
+            .replace('"schema": "billing"', '"schema": "sales"')
+            .replace('foreign_key="core.customers.id"', 'foreign_key="Sales.customers.id"')
+        )
+        root = _project(tmp_path, models)
+    else:
+        root = _project(tmp_path, studio=studio)
+    monkeypatch.chdir(root)
+    code, _, err = _run(["export"], capsys)
+    assert (code, message in err) == (2, True)
+
+
+def test_cli_check_reports_svgs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path)
+    monkeypatch.chdir(root)
+    code, _, err = _run(["check"], capsys)
+    assert code == 1
+    assert err.splitlines() == [
+        "export 'docs/erd/groups/billing.svg' is missing",
+        "export 'docs/erd/groups/core.svg' is missing",
+        "export 'docs/erd/overview.svg' is missing",
+        "hint: run `erdify-studio export` to write the SVGs",
+    ]
+    _run(["export"], capsys)
+    assert _run(["check"], capsys) == (0, "", "")
+
+
+def test_cli_check_shows_layout_problems_before_svgs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, place=False)
+    monkeypatch.chdir(root)
+    code, _, err = _run(["check"], capsys)
+    assert code == 1
+    assert "export '" not in err  # only the layout lines while the layout is out of date
+
+
+def test_cli_check_without_export_dir_is_unchanged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _project(tmp_path, studio="")
+    monkeypatch.chdir(root)
+    assert _run(["check"], capsys) == (0, "", "")

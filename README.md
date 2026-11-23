@@ -31,7 +31,7 @@ pip install "erdify-studio[sql]"   # to read SQL DDL (pulls in erdify[sql])
 erdify-studio [path]               # open the canvas in your browser, drag, save
 erdify-studio check [path]         # exit 1 if the committed layout is out of date
 erdify-studio place --auto [path]  # place new tables, drop stale entries
-erdify-studio export [path]        # planned: write deterministic SVGs
+erdify-studio export [path]        # write one SVG per diagram to export_dir
 ```
 
 Options and sources come from erdify's config (`[tool.erdify]` in `pyproject.toml`)
@@ -90,6 +90,10 @@ or the layout file cannot be read (a model file erdify cannot parse included, wh
 empty project); an internal error also exits 2, with its traceback. Runs without a
 browser, Node or network.
 
+With `export_dir` set and the layout up to date, `check` also exits 1 when an exported
+SVG is missing, out of date (e.g. a new column made a box taller) or stale (a group
+that no longer exists), one line each, and suggests `erdify-studio export`.
+
 With [pre-commit](https://pre-commit.com):
 
 ```yaml
@@ -127,6 +131,30 @@ The result is deterministic — run twice, same bytes — and the file is only w
 something changed. Exit codes: 0 on success, 2 like `check` when something cannot be
 read (a layout file that is not valid, e.g. with git conflict markers, is never
 overwritten).
+
+## Export SVGs
+
+```bash
+erdify-studio export [path]
+```
+
+Writes every diagram as you arranged it to `[tool.erdify-studio] export_dir`, ready to
+commit and embed in READMEs and docs:
+
+- `overview.svg`, and `groups/<group>.svg` per group diagram (the group name in
+  lowercase ASCII with `-` between words, e.g. `my app` → `groups/my-app.svg`;
+  entities without a group → `groups/ungrouped.svg`). Two groups that would share a
+  file are an error (exit 2) naming both.
+- Studio's light theme on a white background, so the diagrams read well on light and
+  dark pages; the font is JetBrains Mono where installed, else the system's monospace.
+- Byte-identical on every machine, so CI can compare the committed files.
+- `groups/*.svg` of groups that no longer exist are deleted; nothing else in
+  `export_dir` is touched. Unchanged files are not rewritten.
+- Exits 1 while the layout file is out of date (run `place --auto` or Save in studio
+  first), 2 without `export_dir`.
+
+With `export_dir` set, **Save** in studio writes the SVGs too, and studio says so when
+they are out of date, so one Save brings them up to date.
 
 ## Configuration
 
