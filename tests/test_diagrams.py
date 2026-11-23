@@ -671,3 +671,16 @@ def test_save_conflicts_on_the_diagram_set(tmp_path: Path, change: str, message:
     with pytest.raises(LayoutConflictError, match=f"models changed.*{message}"):
         _save_all(root, body, layout_revision(path))
     assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("name", ["Overview", "Ungrouped"])
+def test_a_group_named_like_a_built_in_label_is_told_apart(tmp_path: Path, name: str) -> None:
+    models = MODELS.replace('"schema": "core"', f'"schema": "{name}"') + (
+        '\n\nclass Audit(SQLModel, table=True):\n    __tablename__ = "audit"\n'
+        "    id: int = Field(primary_key=True)\n"
+    )
+    payload = _payload(_project(tmp_path, models, studio_toml='group_by = "schema"\n'))
+    labels = [d["label"] for d in payload["diagrams"]]
+    assert len(set(labels)) == len(labels)
+    assert f"{name} (group)" in labels
+    assert (labels[0], labels[-1]) == ("Overview", "Ungrouped")  # the built-ins keep theirs

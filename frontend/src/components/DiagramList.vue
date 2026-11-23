@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import type { DiagramJson } from "../api";
+import type { BoxDef, DiagramJson } from "../api";
 
-defineProps<{
+const props = defineProps<{
   diagrams: DiagramJson[];
+  boxes: Record<string, BoxDef>;
   current: string;
   unsaved: ReadonlySet<string>;
 }>();
@@ -12,7 +13,7 @@ const OVERVIEW = "_overview";
 
 // Own entities only: enums are drawn but not counted.
 function entityCount(diagram: DiagramJson): number {
-  return diagram.own.filter((key) => !key.startsWith("enum:")).length;
+  return diagram.own.filter((key) => props.boxes[key]?.kind === "entity").length;
 }
 </script>
 
