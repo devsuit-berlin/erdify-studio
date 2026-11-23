@@ -2,7 +2,9 @@
 
 import http.client
 import json
+import socket
 import threading
+import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -543,3 +545,24 @@ def test_a_failed_export_after_save_is_a_warning(
     with caplog.at_level("WARNING", logger="erdify_studio._server"):
         exporting.put_layout({"revision": None, "diagrams": _diagrams(exporting)})
     assert any("SVG export after save failed" in r.message for r in caplog.records)
+
+
+@pytest.mark.parametrize(("method", "path"), [("PUT", "/api/layout"), ("POST", "/api/svg")])
+def test_a_refused_request_closes_cleanly(studio: Studio, method: str, path: str) -> None:
+    """The unread body of a refused request must not turn the close into a reset
+    (Windows then aborts the client before it reads the 403)."""
+    body = b"{" + b" " * 60000 + b"}"
+    with socket.create_connection(("127.0.0.1", studio.port)) as sock:
+        sock.sendall(
+            f"{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{studio.port}\r\n"
+            f"Content-Type: application/json\r\nContent-Length: {len(body)}\r\n\r\n".encode()
+            + body
+        )
+        time.sleep(0.2)  # let the server answer and close
+        received = b""
+        while True:
+            chunk = sock.recv(65536)  # a reset raises ConnectionResetError here
+            if not chunk:
+                break
+            received += chunk
+    assert received.startswith(b"HTTP/1.0 403") or received.startswith(b"HTTP/1.1 403")
