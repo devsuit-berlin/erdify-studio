@@ -32,6 +32,9 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           npm run build
+      # The SVG export ports frontend/src/geometry.ts to Python; both must draw the same.
+      - name: Canvas and SVG export draw the same geometry
+        run: node scripts/geometry_parity.mjs | uv run --frozen python scripts/check_geometry.py
       - name: The built frontend loads nothing from the network
         run: uv run --frozen python scripts/check_static.py
       - run: uv build
