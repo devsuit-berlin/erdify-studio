@@ -225,7 +225,8 @@ def render_download(
     if found is None:
         raise LayoutConflictError(
             f"the models changed since the page loaded (no diagram {diagram!r} any more); "
-            "reload the page"
+            "reload the page",
+            reason="models",
         )
     shown = frozenset(found["own"]) | frozenset(found["foreign"])
     layout = Layout()

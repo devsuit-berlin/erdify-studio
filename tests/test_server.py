@@ -743,3 +743,23 @@ def test_post_diagrams_with_a_malformed_body_is_400(studio: Studio) -> None:
         "POST", "/api/diagrams", b"not json", headers={"Content-Type": "application/json"}
     )
     assert status == 400
+
+
+# --- why a save conflicts (#7) -----------------------------------------------------
+
+
+def test_a_changed_layout_file_conflicts_with_reason_layout(studio: Studio) -> None:
+    project = erdify.load_project(studio.root, strict=True)
+    place_project(project, load_config(project.settings.pyproject))
+    status, _, body = studio.put_layout({"revision": None, "diagrams": _diagrams(studio)})
+    assert (status, _json(body)["reason"]) == (409, "layout")
+
+
+def test_changed_models_conflict_with_reason_models(studio: Studio) -> None:
+    diagrams = _diagrams(studio)
+    (studio.root / "shop" / "models.py").write_text(MODELS + ORDER)
+    studio.server.refresh()
+    status, _, body = studio.put_layout({"revision": None, "diagrams": diagrams})
+    assert (status, _json(body)["reason"]) == (409, "models")
+    status, _, body = _post_svg(studio, {"diagram": "gone", "positions": {}})
+    assert (status, _json(body)["reason"]) == (409, "models")

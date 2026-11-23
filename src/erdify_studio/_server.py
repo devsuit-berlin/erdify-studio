@@ -371,7 +371,7 @@ class _Handler(BaseHTTPRequestHandler):
         except PositionsError as e:
             self._error(HTTPStatus.BAD_REQUEST, str(e))
         except LayoutConflictError as e:
-            self._error(HTTPStatus.CONFLICT, str(e))
+            self._error(HTTPStatus.CONFLICT, str(e), reason=e.reason)
         except _LOAD_ERRORS as e:
             self._error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
         except Exception:
@@ -422,7 +422,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._error(HTTPStatus.BAD_REQUEST, str(e))
             return
         except LayoutConflictError as e:
-            self._error(HTTPStatus.CONFLICT, str(e))
+            self._error(HTTPStatus.CONFLICT, str(e), reason=e.reason)
             return
         except _LOAD_ERRORS as e:
             self._error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
@@ -498,11 +498,13 @@ class _Handler(BaseHTTPRequestHandler):
         logger.exception(f"internal error handling {self.command} {self.path.split('?')[0]}")
         self._error(HTTPStatus.INTERNAL_SERVER_ERROR, "internal error (see the terminal)")
 
-    def _error(self, status: HTTPStatus, message: str) -> None:
+    def _error(self, status: HTTPStatus, message: str, *, reason: str | None = None) -> None:
         # The body of a refused request may be unread: don't reuse the connection.
         self.close_connection = True
         self._drain()
-        self._json(status, {"error": message})
+        self._json(
+            status, {"error": message} if reason is None else {"error": message, "reason": reason}
+        )
 
     def _drain(self) -> None:
         """Read the unread body of a request we refuse, up to ``MAX_BODY``.

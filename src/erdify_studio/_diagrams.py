@@ -297,7 +297,8 @@ def save_diagrams(
     if missing or unknown:
         first = f"no diagram {unknown[0]!r} any more" if unknown else f"new diagram {missing[0]!r}"
         raise LayoutConflictError(
-            f"the models changed since the page loaded ({first}); reload the page"
+            f"the models changed since the page loaded ({first}); reload the page",
+            reason="models",
         )
     layout = Layout()
     for name, content in contents.items():
@@ -324,7 +325,8 @@ def checked_positions(positions: object, shown: frozenset[str]) -> dict[str, tup
     if missing or unknown:
         first = f"no box {unknown[0]!r} any more" if unknown else f"new box {missing[0]!r}"
         raise LayoutConflictError(
-            f"the models changed since the page loaded ({first}); reload the page"
+            f"the models changed since the page loaded ({first}); reload the page",
+            reason="models",
         )
     checked: dict[str, tuple[float, float]] = {}
     for key, value in positions.items():
