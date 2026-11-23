@@ -82,3 +82,9 @@ def test_end_marker(optional: bool, many: bool, segments: int, circle: bool) -> 
     marker = end_marker((0, 0), 0, optional=optional, many=many)
     assert marker.lines.count("M ") == segments
     assert (marker.circle is not None) is circle
+
+
+def test_keys_are_ordered_like_javascript_strings() -> None:
+    """JS compares UTF-16 code units: an emoji (surrogate D83D) sorts before U+FFFD."""
+    a, b = BOX, Rect(300, 0, 100, 50)
+    assert edge_line(a, b, 16, "\U0001f600", "�") == edge_line(a, b, 16, "a", "b")

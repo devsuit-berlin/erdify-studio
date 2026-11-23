@@ -58,8 +58,13 @@ def js_number(value: float) -> str:
 
 
 def _fixed(value: float) -> str:
-    """JavaScript's ``value.toFixed(2)``."""
-    return f"{value:.2f}"
+    """JavaScript's ``value.toFixed(2)`` (snapped to 9 decimals: see ``format_number``)."""
+    return f"{round(value, 9):.2f}"
+
+
+def _before(a: str, b: str) -> bool:
+    """``a < b`` as JavaScript compares strings: by UTF-16 code units, not code points."""
+    return a.encode("utf-16-be") < b.encode("utf-16-be")
 
 
 def center(rect: Rect) -> Point:
@@ -85,7 +90,7 @@ def fan_offsets(edges: Sequence[tuple[str, str]]) -> list[float]:
 
     def pair(edge: tuple[str, str]) -> tuple[str, str]:
         a, b = edge
-        return (a, b) if a < b else (b, a)
+        return (a, b) if _before(a, b) else (b, a)
 
     counts: dict[tuple[str, str], int] = {}
     for edge in edges:
@@ -106,7 +111,7 @@ def fan_offsets(edges: Sequence[tuple[str, str]]) -> list[float]:
 def edge_line(a: Rect, b: Rect, offset: float, a_key: str, b_key: str) -> tuple[Point, Point]:
     """The end points of a straight edge between two boxes, shifted sideways by ``offset``."""
     ca, cb = center(a), center(b)
-    p, q = (ca, cb) if a_key < b_key else (cb, ca)
+    p, q = (ca, cb) if _before(a_key, b_key) else (cb, ca)
     length = math.hypot(q[0] - p[0], q[1] - p[1]) or 1
     normal = (-(q[1] - p[1]) / length, (q[0] - p[0]) / length)
 

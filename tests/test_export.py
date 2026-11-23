@@ -2,6 +2,7 @@
 
 import shutil
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 import erdify
 import pytest
@@ -116,8 +117,12 @@ def test_export_paths() -> None:
     ("a", "b"), [("Sales", "sales"), ("my app", "my-app"), ("ungrouped", DEFAULT_GROUP)]
 )
 def test_groups_exported_to_the_same_file_are_an_error(a: str, b: str) -> None:
-    with pytest.raises(ExportError, match=f"{a!r}.*{b!r}|{b!r}.*{a!r}"):
+    def shown(name: str) -> str:
+        return "the entities without a group" if name == DEFAULT_GROUP else repr(name)
+
+    with pytest.raises(ExportError) as raised:
         export_paths([OVERVIEW, a, b])
+    assert shown(a) in str(raised.value) and shown(b) in str(raised.value)
 
 
 def test_a_collision_writes_nothing(tmp_path: Path) -> None:
@@ -530,3 +535,46 @@ def test_an_export_dir_that_is_a_file_is_an_error(tmp_path: Path) -> None:
         _export(root)
     with pytest.raises(ExportError, match="is not a folder"):
         _check(root)
+
+
+# --- follow-ups (#34) --------------------------------------------------------------
+
+
+def test_a_collision_with_the_default_group_names_it_for_people() -> None:
+    with pytest.raises(ExportError) as raised:
+        export_paths([OVERVIEW, "ungrouped", DEFAULT_GROUP])
+    assert "entities without a group" in str(raised.value)
+    assert DEFAULT_GROUP not in str(raised.value)
+
+
+def test_studio_builds_the_diagrams_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = _project(tmp_path)
+    calls: list[int] = []
+    real = build_diagrams
+
+    def counting(*args: Any, **kwargs: Any) -> Diagrams:
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr("erdify_studio._export.build_diagrams", counting)
+    assert _studio(root)["pending"]["svgs"] == 3
+    assert len(calls) == 1
+
+
+def _case_sensitive(directory: Path) -> bool:
+    (directory / "case-probe").write_text("")
+    try:
+        return not (directory / "CASE-PROBE").exists()
+    finally:
+        (directory / "case-probe").unlink()
+
+
+def test_a_case_variant_next_to_the_real_file_is_stale(tmp_path: Path) -> None:
+    if not _case_sensitive(tmp_path):
+        pytest.skip("needs a case-sensitive file system (Linux)")
+    root = _project(tmp_path)
+    _export(root)
+    groups = root / "docs" / "erd" / "groups"
+    (groups / "Core.svg").write_text("x")
+    assert _check(root) == [SvgProblem(groups / "Core.svg", "stale")]
+    assert _export(root).deleted == (PurePosixPath("groups/Core.svg"),)

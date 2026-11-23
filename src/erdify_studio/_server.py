@@ -301,7 +301,7 @@ class _Handler(BaseHTTPRequestHandler):
         try:
             result = export_project(project, config)
         except (StudioError, OSError) as e:
-            logger.info(f"SVG export after save failed: {e}")
+            logger.warning(f"SVG export after save failed: {e}")
             return {"exportError": str(e)}
         except Exception:
             # A bug, but the layout is saved: the page must still take the new revision.

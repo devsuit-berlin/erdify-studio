@@ -53,8 +53,12 @@ _LOOP_STEP = 20
 
 
 def format_number(value: float) -> str:
-    """``value`` rounded to 2 decimals, without trailing zeros; ``-0`` is ``0``."""
-    text = f"{value:.2f}".rstrip("0").rstrip(".")
+    """``value`` rounded to 2 decimals, without trailing zeros; ``-0`` is ``0``.
+
+    Snapped to 9 decimals first: platform maths libraries (``cos``, ``atan2``) may
+    differ by an ulp, which must not flip a value on either side of a ``.xx5`` tie.
+    """
+    text = f"{round(value, 9):.2f}".rstrip("0").rstrip(".")
     return "0" if text in ("-0", "") else text
 
 

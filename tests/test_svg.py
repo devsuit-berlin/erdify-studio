@@ -229,3 +229,8 @@ def test_clip_ids_differ_between_non_latin_groups(tmp_path: Path) -> None:
         set(re.findall(r'<clipPath id="([^"]+)"', _render(payload, n))) for n in ("Заказы", "顧客")
     ]
     assert ids[0] and ids[1] and not ids[0] & ids[1]
+
+
+def test_format_number_is_stable_next_to_a_tie() -> None:
+    """Platform maths libraries may differ by an ulp; both sides of a tie print alike."""
+    assert format_number(1.125 + 1e-12) == format_number(1.125 - 1e-12)

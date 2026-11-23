@@ -95,12 +95,16 @@ def export_paths(diagrams: Iterable[str]) -> dict[str, PurePosixPath]:
             path = _GROUPS / f"{'ungrouped' if name == DEFAULT_GROUP else slug(name)}.svg"
         if path in owners:
             raise ExportError(
-                f"groups {owners[path]!r} and {name!r} would both be exported as "
-                f"{str(path)!r}; rename one"
+                f"{_described(owners[path])} and {_described(name)} would both be exported "
+                f"as {str(path)!r}; rename the group"
             )
         owners[path] = name
         paths[name] = path
     return paths
+
+
+def _described(name: str) -> str:
+    return "the entities without a group" if name == DEFAULT_GROUP else f"group {name!r}"
 
 
 def export_files(project: Project, config: StudioConfig) -> dict[PurePosixPath, str]:
@@ -115,7 +119,11 @@ def export_files(project: Project, config: StudioConfig) -> dict[PurePosixPath, 
     problems = check_project(project, config)
     if problems is None or problems:
         raise OutOfDateLayoutError(problems)
-    payload = build_diagrams(project, config, shown_path=str(config.layout))
+    return _files(build_diagrams(project, config, shown_path=str(config.layout)))
+
+
+def _files(payload: Diagrams) -> dict[PurePosixPath, str]:
+    """Every SVG of ``payload`` (path relative to ``export_dir`` -> text)."""
     paths = export_paths(d["name"] for d in payload["diagrams"])
     return {
         paths[d["name"]]: render_svg(d, payload["boxes"], payload["metrics"])
@@ -151,8 +159,10 @@ def check_exports(project: Project, config: StudioConfig) -> list[SvgProblem]:
 
     Raises as ``export_files``.
     """
-    directory = _export_dir(config)
-    files = export_files(project, config)
+    return _compare(_export_dir(config), export_files(project, config))
+
+
+def _compare(directory: Path, files: dict[PurePosixPath, str]) -> list[SvgProblem]:
     problems: list[SvgProblem] = []
     for relative, text in files.items():
         current = _read(directory / relative)
@@ -177,8 +187,13 @@ def build_studio(project: Project, config: StudioConfig, *, shown_path: str) -> 
     if config.export_dir is None:
         return payload
     payload["exportPath"] = _shown(config.export_dir)
+    pending = payload["pending"]
+    if pending["created"] or pending["placed"] or pending["dropped"]:
+        return payload  # the layout is out of date: Save fixes it and the SVGs at once
     try:
-        payload["pending"]["svgs"] = len(check_exports(project, config))
+        # The payload's positions are the layout file's here: render from it again
+        # instead of building it a second time (what `check_exports` does).
+        payload["pending"]["svgs"] = len(_compare(_export_dir(config), _files(payload)))
     except (ExportError, OSError) as e:
         # Studio must still open; Save and `export` report the problem.
         logger.info(f"cannot compare the SVGs in {str(config.export_dir)!r}: {e}")
@@ -262,8 +277,22 @@ def _owned(directory: Path) -> list[Path]:
 def _stale(directory: Path, files: dict[PurePosixPath, str]) -> list[PurePosixPath]:
     # Compared case-insensitively: on macOS and Windows `Core.svg` *is* `core.svg`,
     # so deleting it as stale would delete the file just compared.
-    wanted = {path.name.lower() for path in files if path.parent == _GROUPS}
-    return [_GROUPS / p.name for p in _owned(directory) if p.name.lower() not in wanted]
+    wanted = {path.name.lower(): path.name for path in files if path.parent == _GROUPS}
+    stale: list[PurePosixPath] = []
+    for path in _owned(directory):
+        name = wanted.get(path.name.lower())
+        if name == path.name:
+            continue
+        if name is not None and not _distinct(path, path.with_name(name)):
+            continue  # a case variant of a wanted file: renamed, not deleted
+        stale.append(_GROUPS / path.name)
+    return stale
+
+
+def _distinct(path: Path, other: Path) -> bool:
+    """Whether ``other`` exists as a file of its own (a case-sensitive file system
+    holding both ``Core.svg`` and ``core.svg``)."""
+    return other.exists() and not path.samefile(other)
 
 
 def _fix_case(directory: Path, files: dict[PurePosixPath, str]) -> None:
@@ -271,5 +300,5 @@ def _fix_case(directory: Path, files: dict[PurePosixPath, str]) -> None:
     names = {path.name.lower(): path.name for path in files if path.parent == _GROUPS}
     for path in _owned(directory):
         name = names.get(path.name.lower())
-        if name is not None and name != path.name:
+        if name is not None and name != path.name and not _distinct(path, path.with_name(name)):
             path.rename(path.with_name(name))

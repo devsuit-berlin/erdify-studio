@@ -534,3 +534,12 @@ def test_an_unexpected_export_error_after_save_still_answers_200(
     result = _json(body)
     assert (status, result["exportError"]) == (200, "internal error (see the terminal)")
     assert result["revision"] == layout_revision(exporting.root / SHOWN)
+
+
+def test_a_failed_export_after_save_is_a_warning(
+    exporting: Studio, caplog: pytest.LogCaptureFixture
+) -> None:
+    (exporting.root / "erd").write_text("not a folder")
+    with caplog.at_level("WARNING", logger="erdify_studio._server"):
+        exporting.put_layout({"revision": None, "diagrams": _diagrams(exporting)})
+    assert any("SVG export after save failed" in r.message for r in caplog.records)
