@@ -1,0 +1,29 @@
+# Datadog Software Catalog entry — synced automatically by the Datadog GitHub
+# integration on push to `main`; there is no sync step in CI.
+#
+# `metadata.name` is the org-global service name and is referenced by
+# code-coverage.datadog.yaml, so renaming it orphans this service's coverage
+# history and gates. Treat it as stable.
+apiVersion: v3
+kind: service
+metadata:
+  name: erdify-studio
+  description: Python CLI with a local Vue UI to arrange erdify ERDs by drag and drop, commit the layout and check it in CI.
+  owner: erdify
+  links:
+    - name: Repository
+      type: repo
+      provider: GitHub
+      url: https://github.com/devsuit-berlin/erdify-studio
+spec:
+  lifecycle: experimental
+  tier: tier-3
+  languages:
+    - python
+    - typescript
+datadog:
+  codeLocations:
+    - repositoryURL: https://github.com/devsuit-berlin/erdify-studio.git
+      paths:
+        - src/erdify_studio/**
+        - frontend/**
