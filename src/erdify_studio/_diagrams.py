@@ -181,7 +181,7 @@ def build_diagrams(project: Project, config: StudioConfig, *, shown_path: str) -
     """
     revision = layout_revision(config.layout)
     existing = load_existing_layout(config.layout)
-    payload = _build(project, config, existing or Layout(), created=existing is None)
+    payload = build_from(project, config, existing or Layout(), created=existing is None)
     payload["revision"] = revision
     payload["layoutPath"] = shown_path
     return payload
@@ -193,7 +193,7 @@ def model_fingerprint(project: Project, config: StudioConfig) -> str:
     Built without the layout file, so a broken or edited layout file never looks like
     a model change. Comments and formatting in the model files don't change it.
     """
-    payload = _build(project, config, Layout(), created=True)
+    payload = build_from(project, config, Layout(), created=True)
     shape = {
         "metrics": payload["metrics"],
         "boxes": payload["boxes"],
@@ -207,8 +207,12 @@ def model_fingerprint(project: Project, config: StudioConfig) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def _build(project: Project, config: StudioConfig, start: Layout, *, created: bool) -> Diagrams:
-    """The payload of ``project`` with every box placed, starting from ``start``."""
+def build_from(project: Project, config: StudioConfig, start: Layout, *, created: bool) -> Diagrams:
+    """The payload of ``project`` with every box placed, starting from ``start``.
+
+    ``revision`` and ``layoutPath`` are left empty; ``pending`` is relative to
+    ``start``, ``new`` lists the boxes placed here.
+    """
     contents = project_diagrams(project, config)
     sizes, edges = place_inputs(project)
     result = place_layout(start, contents, sizes=sizes, edges=edges, created=created)

@@ -19,6 +19,7 @@ from erdify_studio._export import (
     export_files,
     export_paths,
     export_project,
+    merge_studio,
     render_download,
     slug,
 )
@@ -578,3 +579,122 @@ def test_a_case_variant_next_to_the_real_file_is_stale(tmp_path: Path) -> None:
     (groups / "Core.svg").write_text("x")
     assert _check(root) == [SvgProblem(groups / "Core.svg", "stale")]
     assert _export(root).deleted == (PurePosixPath("groups/Core.svg"),)
+
+
+# --- merge on-screen positions (#7) ------------------------------------------------
+
+AUDIT = (
+    '\n\nclass Audit(SQLModel, table=True):\n    __tablename__ = "audit"\n'
+    '    __table_args__ = {"schema": "core"}\n    id: int = Field(primary_key=True)\n'
+    '    customer_id: int = Field(foreign_key="core.customers.id")\n'
+)
+
+
+def _merge(root: Path, positions: object) -> Diagrams:
+    project, config = _load(root)
+    return merge_studio(project, config, positions, shown_path="erdify-layout.json")
+
+
+def _on_screen(root: Path) -> dict[str, dict[str, list[int]]]:
+    return {d["name"]: dict(d["positions"]) for d in _studio(root)["diagrams"]}
+
+
+def _diagram_of(payload: Diagrams, name: str) -> Any:
+    return next(d for d in payload["diagrams"] if d["name"] == name)
+
+
+def test_merge_keeps_the_positions_sent(tmp_path: Path) -> None:
+    root = _project(tmp_path, studio="")
+    screen = _on_screen(root)
+    screen[OVERVIEW]["core.customers"] = [900, 900]
+    merged = _merge(root, screen)
+    assert _diagram_of(merged, OVERVIEW)["positions"]["core.customers"] == [900, 900]
+    assert merged["pending"]["placed"] == 0
+
+
+def test_merge_places_a_new_table_next_to_the_screen(tmp_path: Path) -> None:
+    root = _project(tmp_path, studio="")
+    screen = _on_screen(root)
+    for name in screen:
+        screen[name] = {k: [x + 5000, y + 5000] for k, (x, y) in screen[name].items()}
+    (root / "shop" / "models.py").write_text(MODELS + AUDIT)
+    merged = _merge(root, screen)
+    overview = _diagram_of(merged, OVERVIEW)
+    assert overview["new"] == ["core.audit"]
+    x, y = overview["positions"]["core.audit"]
+    assert x >= 4000 and y >= 4000  # next to the moved boxes, not the saved ones
+    assert merged["pending"]["placed"] >= 1
+
+
+def test_merge_gives_a_returning_table_its_committed_position(tmp_path: Path) -> None:
+    root = _project(tmp_path, studio="")
+    committed = _on_screen(root)[OVERVIEW]["billing.invoices"]
+    screen = _on_screen(root)
+    for name in screen:
+        screen[name].pop("billing.invoices", None)  # the page lost it for one tick
+    merged = _merge(root, screen)
+    overview = _diagram_of(merged, OVERVIEW)
+    assert overview["positions"]["billing.invoices"] == committed
+    assert "billing.invoices" not in overview["new"]
+
+
+def test_merge_drops_removed_tables_and_counts_them(tmp_path: Path) -> None:
+    root = _project(tmp_path, studio="")
+    screen = _on_screen(root)
+    (root / "shop" / "models.py").write_text(
+        MODELS.replace('foreign_key="core.customers.id"', "default=0").replace(
+            MODELS[MODELS.index("class Customer") : MODELS.index("class Invoice")], ""
+        )
+    )
+    merged = _merge(root, screen)
+    assert "core.customers" not in _diagram_of(merged, OVERVIEW)["positions"]
+    assert "core" not in [d["name"] for d in merged["diagrams"]]
+    assert merged["pending"]["dropped"] >= 2  # the entry and the core diagram
+
+
+def test_merge_ignores_unknown_keys_and_diagrams(tmp_path: Path) -> None:
+    root = _project(tmp_path, studio="")
+    screen: dict[str, Any] = _on_screen(root)
+    screen[OVERVIEW]["gone.table"] = [1, 1]
+    screen["gone"] = {"x": [0, 0]}
+    merged = _merge(root, screen)
+    assert "gone.table" not in _diagram_of(merged, OVERVIEW)["positions"]
+
+
+@pytest.mark.parametrize(
+    "positions",
+    [
+        [],
+        {OVERVIEW: []},
+        {OVERVIEW: {"core.customers": [True, 1]}},
+        {OVERVIEW: {"core.customers": [1]}},
+    ],
+)
+def test_merge_refuses_bad_positions(tmp_path: Path, positions: object) -> None:
+    root = _project(tmp_path, studio="")
+    with pytest.raises(PositionsError):
+        _merge(root, positions)
+
+
+def test_merge_counts_outdated_svgs_after_a_new_column(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    _export(root)
+    screen = _on_screen(root)
+    (root / "shop" / "models.py").write_text(
+        MODELS.replace(
+            "    id: int = Field(primary_key=True)\n\n\nclass Invoice",
+            "    id: int = Field(primary_key=True)\n    email: str\n\n\nclass Invoice",
+        )
+    )
+    assert _merge(root, screen)["pending"]["svgs"] == 2
+
+
+def test_positions_beyond_the_coordinate_limit_are_refused(tmp_path: Path) -> None:
+    root = _project(tmp_path, studio="")
+    screen = _on_screen(root)
+    screen[OVERVIEW]["core.customers"] = [10**10, 0]
+    with pytest.raises(PositionsError):
+        _merge(root, screen)
+    project, config = _load(root)
+    with pytest.raises(PositionsError):
+        render_download(project, config, OVERVIEW, screen[OVERVIEW])

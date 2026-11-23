@@ -694,3 +694,52 @@ def test_the_watcher_follows_the_files(tmp_path: Path) -> None:
 def test_status_with_an_unreadable_layout_file_is_500(studio: Studio) -> None:
     (studio.root / SHOWN).mkdir()  # a folder where the layout file should be
     assert studio.request("GET", "/api/status")[0] == 500
+
+
+def _merge(studio: Studio, payload: object, **kwargs: Any) -> tuple[int, dict[str, str], bytes]:
+    headers = {"Content-Type": "application/json", **kwargs.pop("headers", {})}
+    return studio.request(
+        "POST", "/api/diagrams", json.dumps(payload).encode(), headers=headers, **kwargs
+    )
+
+
+def test_post_diagrams_merges_the_screen_positions(studio: Studio) -> None:
+    diagrams = _diagrams(studio)
+    diagrams[OVERVIEW] = {**diagrams[OVERVIEW], "customers": [777, 55]}
+    (studio.root / "shop" / "models.py").write_text(MODELS + ORDER)
+    studio.server.refresh()
+    status, _, body = _merge(studio, {"diagrams": diagrams})
+    overview = next(d for d in _json(body)["diagrams"] if d["name"] == OVERVIEW)
+    assert status == 200
+    assert overview["positions"]["customers"] == [777, 55]
+    assert overview["new"] == ["orders"]
+
+
+@pytest.mark.parametrize(
+    ("payload", "status"),
+    [({"diagrams": []}, 400), ({}, 400), ({"diagrams": {OVERVIEW: {"customers": [1]}}}, 400)],
+)
+def test_post_diagrams_errors(studio: Studio, payload: object, status: int) -> None:
+    assert _merge(studio, payload)[0] == status
+
+
+def test_post_diagrams_requires_the_token(studio: Studio) -> None:
+    assert _merge(studio, {"diagrams": {}}, token=False)[0] == 403
+
+
+def test_post_diagrams_with_an_unreadable_layout_file_is_500(studio: Studio) -> None:
+    (studio.root / SHOWN).write_text("<<<<<<< HEAD\n")
+    assert _merge(studio, {"diagrams": {}})[0] == 500
+
+
+def test_post_diagrams_bug_is_500(studio: Studio, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("erdify_studio._server.merge_studio", _crash)
+    status, _, body = _merge(studio, {"diagrams": {}})
+    assert (status, _json(body)) == (500, {"error": "internal error (see the terminal)"})
+
+
+def test_post_diagrams_with_a_malformed_body_is_400(studio: Studio) -> None:
+    status, _, _ = studio.request(
+        "POST", "/api/diagrams", b"not json", headers={"Content-Type": "application/json"}
+    )
+    assert status == 400

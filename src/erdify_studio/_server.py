@@ -7,7 +7,8 @@ token of the URL the browser was opened with.
 
 Routes: ``GET /`` and ``GET /assets/*`` (the built frontend), ``GET /api/status``
 (model fingerprint, layout revision, load error), ``GET /api/diagrams``
-(``build_studio``), ``PUT /api/layout`` (``save_diagrams``, then the SVG export) and
+(``build_studio``), ``POST /api/diagrams`` (``merge_studio``: the page's positions
+merged into the current model), ``PUT /api/layout`` (``save_diagrams``, then the SVG export) and
 ``POST /api/svg`` (``render_download``: one diagram as an SVG download).
 
 A watcher thread re-loads the project about every second and every API request reads
@@ -36,7 +37,7 @@ from erdify import Project
 from erdify_studio._config import StudioConfig
 from erdify_studio._diagrams import layout_revision, model_fingerprint, save_diagrams
 from erdify_studio._errors import LayoutConflictError, PositionsError, StudioError
-from erdify_studio._export import build_studio, export_project, render_download
+from erdify_studio._export import build_studio, export_project, merge_studio, render_download
 
 logger = logging.getLogger(__name__)
 
@@ -256,10 +257,14 @@ class _Handler(BaseHTTPRequestHandler):
         self._body_read = False
         if not self._trusted():
             return
-        if self.path.split("?", 1)[0] != "/api/svg":
+        path = self.path.split("?", 1)[0]
+        if path not in ("/api/svg", "/api/diagrams"):
             self._error(HTTPStatus.METHOD_NOT_ALLOWED, "method not allowed")
         elif self._authorized():
-            self._svg()
+            if path == "/api/svg":
+                self._svg()
+            else:
+                self._merge()
 
     def _not_allowed(self) -> None:
         if self._trusted():
@@ -375,6 +380,31 @@ class _Handler(BaseHTTPRequestHandler):
             self._json(
                 HTTPStatus.OK, {"saved": self.server.shown_path, "revision": revision, **exported}
             )
+
+    def _merge(self) -> None:
+        """The diagrams of the current model with the page's on-screen positions."""
+        payload = self._body()
+        if payload is None:
+            return
+        if "diagrams" not in payload:
+            self._error(HTTPStatus.BAD_REQUEST, 'expected {"diagrams": {...}}')
+            return
+        try:
+            snapshot = self.server.snapshot()
+            merged = merge_studio(
+                snapshot.project,
+                snapshot.config,
+                payload["diagrams"],
+                shown_path=self.server.shown_path,
+            )
+        except PositionsError as e:
+            self._error(HTTPStatus.BAD_REQUEST, str(e))
+        except _LOAD_ERRORS as e:
+            self._error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
+        except Exception:
+            self._internal_error()
+        else:
+            self._json(HTTPStatus.OK, merged)
 
     def _svg(self) -> None:
         """One diagram as SVG with the positions the page shows, as a download."""
