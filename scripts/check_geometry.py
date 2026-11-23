@@ -3,7 +3,7 @@
 Reads the JSON ``scripts/geometry_parity.mjs`` prints (``frontend/src/geometry.ts`` run
 on ``scripts/geometry_cases.json``) from stdin, runs the Python port
 (``erdify_studio._geometry``) on the same cases and compares every number within
-0.01. Exits 1 naming the first case that differs. Run in CI:
+one unit in the second decimal. Exits 1 naming the first case that differs. Run in CI:
 
     node scripts/geometry_parity.mjs | uv run python scripts/check_geometry.py
 """
@@ -26,7 +26,9 @@ from erdify_studio._geometry import (
 )
 
 CASES = Path(__file__).with_name("geometry_cases.json")
-TOLERANCE = 0.01
+#: One unit in the last place of a 2-decimal number: toFixed rounds the exact binary
+#: value, the port a value snapped to 9 decimals (see ``_geometry.fixed2``).
+TOLERANCE = 0.0101
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?(?:e[-+]?\d+)?")
 
 

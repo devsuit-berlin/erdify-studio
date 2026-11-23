@@ -127,6 +127,8 @@ def start_server(
 
 class _Handler(BaseHTTPRequestHandler):
     server: StudioServer
+    #: Whether the current request's body was read (``_body`` or ``_drain``).
+    _body_read = False
 
     # --- methods ------------------------------------------------------------------
 
@@ -145,6 +147,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._static(path)
 
     def do_PUT(self) -> None:
+        self._body_read = False
         if not self._trusted():
             return
         if self.path.split("?", 1)[0] != "/api/layout":
@@ -153,6 +156,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._save()
 
     def do_POST(self) -> None:
+        self._body_read = False
         if not self._trusted():
             return
         if self.path.split("?", 1)[0] != "/api/svg":
@@ -301,7 +305,7 @@ class _Handler(BaseHTTPRequestHandler):
         try:
             result = export_project(project, config)
         except (StudioError, OSError) as e:
-            logger.info(f"SVG export after save failed: {e}")
+            logger.warning(f"SVG export after save failed: {e}")
             return {"exportError": str(e)}
         except Exception:
             # A bug, but the layout is saved: the page must still take the new revision.
@@ -323,6 +327,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._error(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, f"body over {MAX_BODY} bytes")
             return None
         try:
+            self._body_read = True
             payload = json.loads(self.rfile.read(int(length)))
         except (ValueError, RecursionError) as e:
             self._error(HTTPStatus.BAD_REQUEST, f"invalid JSON: {e}")
@@ -353,7 +358,21 @@ class _Handler(BaseHTTPRequestHandler):
     def _error(self, status: HTTPStatus, message: str) -> None:
         # The body of a refused request may be unread: don't reuse the connection.
         self.close_connection = True
+        self._drain()
         self._json(status, {"error": message})
+
+    def _drain(self) -> None:
+        """Read the unread body of a request we refuse, up to ``MAX_BODY``.
+
+        Closing a socket with unread data sends a TCP reset instead of a clean close;
+        the client may then lose the error response (Windows aborts the read).
+        """
+        if self._body_read or self.command not in ("PUT", "POST"):
+            return
+        self._body_read = True
+        length = self.headers.get("Content-Length", "")
+        if length.isdigit() and int(length) <= MAX_BODY:
+            self.rfile.read(int(length))
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 - stdlib name
         logger.info(f"{self.address_string()} {format % args}")

@@ -5,7 +5,7 @@
   "description": "Browser canvas of erdify-studio; built into src/erdify_studio/_static and shipped in the wheel.",
   "license": "MIT",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.18.0"
   },
   "scripts": {
     "dev": "vite",
