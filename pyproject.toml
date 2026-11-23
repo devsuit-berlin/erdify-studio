@@ -51,6 +51,7 @@ dev = [
     "ruff>=0.17.4",
 ]
 hooks = ["pre-commit>=4.7.0"]
+docs = ["mkdocs-material>=9.7.7"]
 
 [tool.poe.tasks]
 test = { help = "Run the test suite with coverage", cmd = "pytest --cov=erdify_studio --cov-report=term-missing" }
@@ -60,6 +61,7 @@ lint = { help = "Lint and type-check", sequence = [
     { cmd = "mypy" },
 ] }
 format = { help = "Format", cmd = "ruff format ." }
+docs = { help = "Build the docs site into site/ (uv run --group docs poe docs)", cmd = "mkdocs build --strict" }
 frontend = { help = "Build the frontend into src/erdify_studio/_static", shell = "npm --prefix frontend ci --ignore-scripts --no-audit --no-fund && npm --prefix frontend run build" }
 build = { help = "Build sdist + wheel into dist/ (run `poe frontend` first)", cmd = "uv build" }
 check-wheel = { help = "Check the built wheel ships the frontend", cmd = "python scripts/check_wheel.py dist" }
