@@ -127,10 +127,13 @@ def _overview(studio: Studio) -> dict[str, Any]:
     return result
 
 
+def _diagrams(studio: Studio) -> dict[str, dict[str, list[int]]]:
+    """Every diagram's positions, as the page sends them back unchanged."""
+    return {d["name"]: d["positions"] for d in _overview(studio)["diagrams"]}
+
+
 def _positions(studio: Studio) -> dict[str, list[int]]:
-    overview = next(d for d in _overview(studio)["diagrams"] if d["name"] == OVERVIEW)
-    positions: dict[str, list[int]] = overview["positions"]
-    return positions
+    return _diagrams(studio)[OVERVIEW]
 
 
 # --- binding and static files -----------------------------------------------------
@@ -255,22 +258,29 @@ def test_get_overview(studio: Studio) -> None:
 
 
 def test_put_layout_saves(studio: Studio) -> None:
-    status, _, body = studio.put_layout({"revision": None, "positions": _positions(studio)})
+    status, _, body = studio.put_layout({"revision": None, "diagrams": _diagrams(studio)})
     path = studio.root / SHOWN
     assert (status, _json(body)) == (200, {"saved": SHOWN, "revision": layout_revision(path)})
 
 
 def test_put_layout_bad_positions_is_400(studio: Studio) -> None:
-    positions: dict[str, object] = {**_positions(studio), "customers": [True, 1]}
-    status, _, body = studio.put_layout({"revision": None, "positions": positions})
+    diagrams: dict[str, Any] = _diagrams(studio)
+    diagrams[OVERVIEW] = {**diagrams[OVERVIEW], "customers": [True, 1]}
+    status, _, body = studio.put_layout({"revision": None, "diagrams": diagrams})
     assert (status, "error" in _json(body)) == (400, True)
     assert not (studio.root / SHOWN).exists()
 
 
 @pytest.mark.parametrize(
     "body",
-    [b"not json", b"[]", b'{"positions": {}}', b'{"revision": 1, "positions": {}}'],
-    ids=["not-json", "not-object", "no-revision", "revision-not-string"],
+    [
+        b"not json",
+        b"[]",
+        b'{"diagrams": {}}',
+        b'{"revision": 1, "diagrams": {}}',
+        b'{"revision": null, "positions": {}}',
+    ],
+    ids=["not-json", "not-object", "no-revision", "revision-not-string", "no-diagrams"],
 )
 def test_put_a_malformed_body_is_400(studio: Studio, body: bytes) -> None:
     status, _, _ = studio.request(
@@ -298,7 +308,7 @@ def test_put_without_length_is_411(studio: Studio) -> None:
 
 def test_put_wrong_content_type_is_415(studio: Studio) -> None:
     status, _, _ = studio.put_layout(
-        {"revision": None, "positions": {}}, headers={"Content-Type": "text/plain"}
+        {"revision": None, "diagrams": {}}, headers={"Content-Type": "text/plain"}
     )
     assert status == 415
 
@@ -306,7 +316,7 @@ def test_put_wrong_content_type_is_415(studio: Studio) -> None:
 def test_put_conflict_is_409(studio: Studio) -> None:
     project = erdify.load_project(studio.root, strict=True)
     place_project(project, load_config(project.settings.pyproject))
-    status, _, body = studio.put_layout({"revision": None, "positions": _positions(studio)})
+    status, _, body = studio.put_layout({"revision": None, "diagrams": _diagrams(studio)})
     assert (status, "changed" in _json(body)["error"]) == (409, True)
 
 
@@ -318,9 +328,9 @@ def test_broken_layout_after_start_is_500_on_get(studio: Studio) -> None:
 
 def test_broken_layout_is_never_overwritten(studio: Studio) -> None:
     path = studio.root / SHOWN
-    positions = _positions(studio)
+    diagrams = _diagrams(studio)
     path.write_text("<<<<<<< HEAD\n")
-    status, _, _ = studio.put_layout({"revision": layout_revision(path), "positions": positions})
+    status, _, _ = studio.put_layout({"revision": layout_revision(path), "diagrams": diagrams})
     assert (status, path.read_text()) == (500, "<<<<<<< HEAD\n")
 
 
@@ -351,9 +361,9 @@ def test_a_reload_shows_changed_models(studio: Studio) -> None:
 
 
 def test_saving_from_a_page_with_old_models_is_409(studio: Studio) -> None:
-    positions = _positions(studio)
+    diagrams = _diagrams(studio)
     (studio.root / "shop" / "models.py").write_text(MODELS + ORDER)
-    status, _, body = studio.put_layout({"revision": None, "positions": positions})
+    status, _, body = studio.put_layout({"revision": None, "diagrams": diagrams})
     assert (status, "models changed" in _json(body)["error"]) == (409, True)
     assert not (studio.root / SHOWN).exists()
 
@@ -368,7 +378,7 @@ def _crash(*args: object, **kwargs: object) -> None:
     raise RuntimeError("boom")
 
 
-@pytest.mark.parametrize("target", ["build_diagrams", "save_overview"])
+@pytest.mark.parametrize("target", ["build_diagrams", "save_diagrams"])
 def test_an_unexpected_error_is_500_not_a_dropped_connection(
     studio: Studio, monkeypatch: pytest.MonkeyPatch, target: str
 ) -> None:
@@ -376,5 +386,5 @@ def test_an_unexpected_error_is_500_not_a_dropped_connection(
     if target == "build_diagrams":
         status, _, body = studio.request("GET", "/api/overview")
     else:
-        status, _, body = studio.put_layout({"revision": None, "positions": {}})
+        status, _, body = studio.put_layout({"revision": None, "diagrams": {}})
     assert (status, _json(body)) == (500, {"error": "internal error (see the terminal)"})

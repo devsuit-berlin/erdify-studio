@@ -28,7 +28,7 @@ from erdify_studio._diagrams import (
     Diagrams,
     build_diagrams,
     layout_revision,
-    save_overview,
+    save_diagrams,
 )
 from erdify_studio._errors import LayoutConflictError, PositionsError
 from erdify_studio._place import name_box_size, place_inputs
@@ -417,9 +417,19 @@ def _positions(keys: tuple[str, ...] = (*ENTITIES, ENUM)) -> dict[str, object]:
     return {key: [i * 400, 0] for i, key in enumerate(keys)}
 
 
-def _save(root: Path, positions: object, revision: str | None = None) -> str | None:
+def _body(root: Path) -> dict[str, object]:
+    """Every diagram's positions as the page would send them unchanged."""
+    return {d["name"]: dict(d["positions"]) for d in _payload(root)["diagrams"]}
+
+
+def _save_all(root: Path, diagrams: object, revision: str | None = None) -> str | None:
     project, config = _load(root)
-    return save_overview(project, config, positions, revision)
+    return save_diagrams(project, config, diagrams, revision)
+
+
+def _save(root: Path, positions: object, revision: str | None = None) -> str | None:
+    """Save ``positions`` for the overview, every group diagram as the page shows it."""
+    return _save_all(root, {**_body(root), OVERVIEW: positions}, revision)
 
 
 def test_save_writes_the_overview_positions(tmp_path: Path) -> None:
@@ -579,3 +589,85 @@ def test_box_width_fits_each_drawn_row(tmp_path: Path) -> None:
         6 + len(r["name"]) + 2 + len(r["type"]) + (1 if r["nullable"] else 0) for r in box["rows"]
     )
     assert box["width"] - padding >= widest * char
+
+
+def test_save_writes_every_diagram(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    body = _body(root)
+    body["core"] = {**body["core"], "core.customers": [777, 55]}  # type: ignore[dict-item]
+    _save_all(root, body)
+    diagrams = load_layout(root / "erdify-layout.json").diagrams
+    assert diagrams["core"]["core.customers"] == (777, 55)
+    assert diagrams[OVERVIEW]["core.customers"] == tuple(body[OVERVIEW]["core.customers"])  # type: ignore[index]
+
+
+def test_the_same_entity_keeps_a_position_per_diagram(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    body: dict[str, Any] = _body(root)
+    body[OVERVIEW]["core.customers"] = [0, 0]
+    body["core"]["core.customers"] = [900, 0]
+    body["billing"]["core.customers"] = [300, 300]  # a foreign box there
+    _save_all(root, body)
+    diagrams = load_layout(root / "erdify-layout.json").diagrams
+    assert [diagrams[d]["core.customers"] for d in (OVERVIEW, "core", "billing")] == [
+        (0, 0),
+        (900, 0),
+        (300, 300),
+    ]
+
+
+def test_save_with_group_by_none(tmp_path: Path) -> None:
+    root = _project(tmp_path, studio_toml='group_by = "none"\n')
+    body = _body(root)
+    assert list(body) == [OVERVIEW]
+    _save_all(root, body)
+    project, config = _load(root)
+    assert check_project(project, config) == []
+
+
+def test_a_group_named_overview_round_trips(tmp_path: Path) -> None:
+    root = _project(tmp_path, MODELS.replace('"schema": "core"', '"schema": "overview"'))
+    _save_all(root, _body(root))
+    assert set(load_layout(root / "erdify-layout.json").diagrams) == {
+        OVERVIEW,
+        "billing",
+        "overview",
+    }
+    project, config = _load(root)
+    assert check_project(project, config) == []
+
+
+@pytest.mark.parametrize("diagrams", [[], None, "x"], ids=["list", "none", "string"])
+def test_save_refuses_a_non_object(tmp_path: Path, diagrams: object) -> None:
+    root = _project(tmp_path)
+    with pytest.raises(PositionsError, match="diagrams must be an object"):
+        _save_all(root, diagrams)
+    assert not (root / "erdify-layout.json").exists()
+
+
+def test_save_refuses_a_diagram_that_is_not_an_object(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    with pytest.raises(PositionsError, match="positions must be an object"):
+        _save_all(root, {**_body(root), "core": [1, 2]})
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ("missing", "new diagram 'core'"),
+        ("extra", "no diagram 'stale' any more"),
+    ],
+)
+def test_save_conflicts_on_the_diagram_set(tmp_path: Path, change: str, message: str) -> None:
+    root = _project(tmp_path)
+    _placed(root)
+    path = root / "erdify-layout.json"
+    before = path.read_bytes()
+    body = _body(root)
+    if change == "missing":
+        del body["core"]
+    else:
+        body["stale"] = {}
+    with pytest.raises(LayoutConflictError, match=f"models changed.*{message}"):
+        _save_all(root, body, layout_revision(path))
+    assert path.read_bytes() == before

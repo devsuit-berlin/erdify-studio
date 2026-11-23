@@ -6,7 +6,7 @@ DNS rebinding) and, when it has one, as ``Origin``; the API also needs the rando
 token of the URL the browser was opened with.
 
 Routes: ``GET /`` and ``GET /assets/*`` (the built frontend), ``GET /api/overview``
-(``build_diagrams``) and ``PUT /api/layout`` (``save_overview``).
+(``build_diagrams``) and ``PUT /api/layout`` (``save_diagrams``).
 
 The project is loaded again for every API request, so a reload after a ``git
 checkout`` or a model change shows the current models instead of treating their
@@ -30,7 +30,7 @@ import erdify
 from erdify import Project
 
 from erdify_studio._config import StudioConfig
-from erdify_studio._diagrams import build_diagrams, save_overview
+from erdify_studio._diagrams import build_diagrams, save_diagrams
 from erdify_studio._errors import LayoutConflictError, PositionsError, StudioError
 
 logger = logging.getLogger(__name__)
@@ -223,7 +223,7 @@ class _Handler(BaseHTTPRequestHandler):
         try:
             with self.server.save_lock:
                 project, config = self.server.load()
-                revision = save_overview(project, config, payload["positions"], payload["revision"])
+                revision = save_diagrams(project, config, payload["diagrams"], payload["revision"])
         except PositionsError as e:
             self._error(HTTPStatus.BAD_REQUEST, str(e))
         except LayoutConflictError as e:
@@ -255,13 +255,13 @@ class _Handler(BaseHTTPRequestHandler):
             return None
         if (
             not isinstance(payload, dict)
-            or "positions" not in payload
+            or "diagrams" not in payload
             or not isinstance(payload.get("revision", 0), str | None)
             or "revision" not in payload
         ):
             self._error(
                 HTTPStatus.BAD_REQUEST,
-                'expected {"revision": string or null, "positions": {...}}',
+                'expected {"revision": string or null, "diagrams": {...}}',
             )
             return None
         return payload

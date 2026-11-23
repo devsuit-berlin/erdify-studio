@@ -219,28 +219,27 @@ def build_diagrams(project: Project, config: StudioConfig, *, shown_path: str) -
     }
 
 
-def save_overview(
-    project: Project, config: StudioConfig, positions: object, revision: str | None
+def save_diagrams(
+    project: Project, config: StudioConfig, diagrams: object, revision: str | None
 ) -> str | None:
-    """Save the overview ``positions`` and return the layout file's new revision.
+    """Save the positions of every diagram and return the layout file's new revision.
 
-    Writes what ``place --auto`` would write with these overview positions: group
-    diagrams get their missing boxes placed, stale entries and diagrams are dropped,
-    so ``check_project`` passes afterwards.
+    Writes exactly these positions, then what ``place --auto`` would add (nothing for
+    a complete body), so ``check_project`` passes afterwards.
 
     Args:
         project: The project as ``erdify.load_project(..., strict=True)`` returns it.
         config: Its studio settings.
-        positions: Layout key -> ``[x, y]`` for every box of the overview, as decoded
-            from JSON (validated here).
+        diagrams: Diagram name -> layout key -> ``[x, y]`` for every box of every
+            diagram, as decoded from JSON (validated here).
         revision: ``layout_revision`` of the file the positions were based on.
 
     Raises:
         LayoutConflictError: The file's revision is not ``revision`` any more.
-        LayoutConflictError: ``positions`` has other boxes than the overview: the
-            models changed since the page loaded.
-        PositionsError: A position is not a pair of finite numbers within the
-            coordinate limit.
+        LayoutConflictError: Other diagrams or boxes than the project has: the models
+            changed since the page loaded.
+        PositionsError: ``diagrams`` or a diagram is not an object, or a position is
+            not a pair of finite numbers within the coordinate limit.
         LayoutError: The layout file cannot be read or written (see ``save_layout``).
     """
     current = layout_revision(config.layout)
@@ -248,17 +247,26 @@ def save_overview(
         raise LayoutConflictError(
             f"{str(config.layout)!r} changed since the positions were read from it"
         )
-    diagrams = project_diagrams(project, config)
-    existing = load_existing_layout(config.layout)
-    layout = Layout({name: dict(p) for name, p in (existing or Layout()).diagrams.items()})
-    layout.diagrams[OVERVIEW] = {}
-    for key, (x, y) in _checked(positions, diagrams[OVERVIEW].shown).items():
-        try:
-            layout.set_position(OVERVIEW, key, x, y)
-        except LayoutError as e:
-            raise PositionsError(str(e)) from None
+    if not isinstance(diagrams, Mapping):
+        raise PositionsError(f"diagrams must be an object, got {type(diagrams).__name__!r}")
+    contents = project_diagrams(project, config)
+    missing = sorted(contents.keys() - diagrams.keys())
+    unknown = sorted(diagrams.keys() - contents.keys())
+    if missing or unknown:
+        first = f"no diagram {unknown[0]!r} any more" if unknown else f"new diagram {missing[0]!r}"
+        raise LayoutConflictError(
+            f"the models changed since the page loaded ({first}); reload the page"
+        )
+    layout = Layout()
+    for name, content in contents.items():
+        layout.add_diagram(name)
+        for key, (x, y) in _checked(diagrams[name], content.shown).items():
+            try:
+                layout.set_position(name, key, x, y)
+            except LayoutError as e:
+                raise PositionsError(str(e)) from None
     sizes, edges = place_inputs(project)
-    result = place_layout(layout, diagrams, sizes=sizes, edges=edges)
+    result = place_layout(layout, contents, sizes=sizes, edges=edges)
     save_layout(result.layout, config.layout)
     return layout_revision(config.layout)
 
