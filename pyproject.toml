@@ -26,10 +26,10 @@ classifiers = [
 ]
 # 1.8.0: the public API studio builds on (EntityInfo.schema/module/app,
 # diagram_edges, load_project, enum_users) and schema-aware tables and edges.
-dependencies = ["erdify>=1.8.0,<2"]
+dependencies = ["erdify>=1.9.0,<2"]
 
 [project.optional-dependencies]
-sql = ["erdify[sql]>=1.8.0,<2"]
+sql = ["erdify[sql]>=1.9.0,<2"]
 
 [project.scripts]
 erdify-studio = "erdify_studio.cli:main"
@@ -42,7 +42,7 @@ Issues = "https://github.com/devsuit-berlin/erdify-studio/issues"
 
 [dependency-groups]
 dev = [
-    "erdify[sql]>=1.8.0,<2",  # tests read SQL DDL
+    "erdify[sql]>=1.9.0,<2",  # tests read SQL DDL
     "mypy>=2.4",
     "poethepoet>=0.49.0",
     "pytest>=9.2.0",
