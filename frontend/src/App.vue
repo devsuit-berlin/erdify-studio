@@ -36,7 +36,7 @@ const diagram = computed<DiagramJson | null>(
 const banner = computed(() => {
   const data = loaded.value;
   if (!data || !pendingShown.value) return null;
-  const { placed, diagrams, dropped, created } = data.pending;
+  const { placed, diagrams, dropped, created, svgs } = data.pending;
   if (placed) {
     return `${placed} new ${placed === 1 ? "box was" : "boxes were"} placed automatically in ${diagrams} ${diagrams === 1 ? "diagram" : "diagrams"} — save to keep them.`;
   }
@@ -44,6 +44,7 @@ const banner = computed(() => {
   if (dropped) {
     return `The layout file has ${dropped} stale ${dropped === 1 ? "entry" : "entries"} — save to drop them.`;
   }
+  if (svgs && data.exportPath) return `The SVGs in ${data.exportPath} are out of date — save to update them.`;
   return null;
 });
 
@@ -113,10 +114,25 @@ async function save(): Promise<void> {
     if (outcome.ok) {
       revision.value = outcome.revision;
       moved.value = new Set([...moved.value].filter((name) => edits[name] !== editsAtSave[name]));
-      pendingShown.value = false;
       newKeys.value = {};
       toast.remove(SAVE_ERROR);
-      toast.add({ title: `Saved to ${outcome.saved}`, color: "success", icon: "i-lucide-check" });
+      // The layout file now holds everything; only the SVGs may still lag behind.
+      if (loaded.value) {
+        loaded.value.pending = { placed: 0, diagrams: 0, dropped: 0, created: false, svgs: outcome.exportError ? 1 : 0 };
+      }
+      if (outcome.exportError) {
+        // The layout is saved; the SVGs are not. Keep Save enabled to retry.
+        pendingShown.value = true;
+        toast.add({
+          title: `Saved, but the SVG export failed: ${outcome.exportError}`,
+          color: "warning",
+          icon: "i-lucide-triangle-alert",
+          duration: 0,
+        });
+      } else {
+        pendingShown.value = false;
+        toast.add({ title: `Saved to ${outcome.saved}`, color: "success", icon: "i-lucide-check" });
+      }
     } else if (outcome.conflict) {
       showError(
         "The layout file or the models changed since this page loaded (on disk or from another tab). Reload to get them — saving now would overwrite them.",
@@ -160,8 +176,8 @@ onMounted(async () => {
     positions.value = Object.fromEntries(data.diagrams.map((d) => [d.name, { ...d.positions }]));
     newKeys.value = Object.fromEntries(data.diagrams.map((d) => [d.name, new Set(d.new)]));
     revision.value = data.revision;
-    const { placed, dropped, created } = data.pending;
-    pendingShown.value = created || placed > 0 || dropped > 0;
+    const { placed, dropped, created, svgs } = data.pending;
+    pendingShown.value = created || placed > 0 || dropped > 0 || svgs > 0;
     loaded.value = data;
     // An unknown name in the hash is replaced, so the URL names what is shown.
     if (hashDiagram() !== null) select(hashTarget());

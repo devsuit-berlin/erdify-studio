@@ -378,12 +378,12 @@ def _crash(*args: object, **kwargs: object) -> None:
     raise RuntimeError("boom")
 
 
-@pytest.mark.parametrize("target", ["build_diagrams", "save_diagrams"])
+@pytest.mark.parametrize("target", ["build_studio", "save_diagrams"])
 def test_an_unexpected_error_is_500_not_a_dropped_connection(
     studio: Studio, monkeypatch: pytest.MonkeyPatch, target: str
 ) -> None:
     monkeypatch.setattr(f"erdify_studio._server.{target}", _crash)
-    if target == "build_diagrams":
+    if target == "build_studio":
         status, _, body = studio.request("GET", "/api/diagrams")
     else:
         status, _, body = studio.put_layout({"revision": None, "diagrams": {}})
@@ -393,3 +393,52 @@ def test_an_unexpected_error_is_500_not_a_dropped_connection(
 def test_the_old_overview_route_is_gone(studio: Studio) -> None:
     status, _, _ = studio.request("GET", "/api/overview")
     assert status == 404
+
+
+# --- SVG export on save ------------------------------------------------------------
+
+
+@pytest.fixture
+def exporting(tmp_path: Path) -> Iterator[Studio]:
+    root = _project(tmp_path / "project")
+    (root / "pyproject.toml").write_text(
+        '[tool.erdify]\ninclude = ["**/models.py"]\n[tool.erdify-studio]\nexport_dir = "erd"\n'
+    )
+    server = start_server(_loader(root), static_dir=_static(tmp_path), shown_path=SHOWN)
+    thread = threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True)
+    thread.start()
+    try:
+        yield Studio(server, root)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+def test_save_writes_the_svgs(exporting: Studio) -> None:
+    status, _, body = exporting.put_layout({"revision": None, "diagrams": _diagrams(exporting)})
+    result = _json(body)
+    assert (status, result["exported"], "exportError" in result) == (200, 2, False)
+    assert (exporting.root / "erd" / "overview.svg").is_file()
+    assert _payload(exporting)["pending"]["svgs"] == 0
+
+
+def test_a_failed_export_still_saves_the_layout(exporting: Studio) -> None:
+    models = exporting.root / "shop" / "models.py"
+    models.write_text(
+        models.read_text()
+        + '\n\nclass A(SQLModel, table=True):\n    __tablename__ = "a"\n'
+        + '    __table_args__ = {"schema": "Sales"}\n    id: int = Field(primary_key=True)\n'
+        + '\n\nclass B(SQLModel, table=True):\n    __tablename__ = "b"\n'
+        + '    __table_args__ = {"schema": "sales"}\n    id: int = Field(primary_key=True)\n'
+    )
+    (exporting.root / "pyproject.toml").write_text(
+        '[tool.erdify]\ninclude = ["**/models.py"]\n[tool.erdify-studio]\n'
+        'export_dir = "erd"\ngroup_by = "schema"\n'
+    )
+    status, _, body = exporting.put_layout({"revision": None, "diagrams": _diagrams(exporting)})
+    result = _json(body)
+    path = exporting.root / SHOWN
+    assert status == 200
+    assert "'Sales'" in result["exportError"] and "exported" not in result
+    assert result["revision"] == layout_revision(path)

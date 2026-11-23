@@ -55,6 +55,8 @@ export interface Pending {
   diagrams: number;
   dropped: number;
   created: boolean;
+  // Exported SVGs that are missing, out of date or stale (0 without export_dir).
+  svgs: number;
 }
 
 export type Position = [number, number];
@@ -79,6 +81,8 @@ export interface Diagrams {
   pending: Pending;
   layoutPath: string;
   projectPath: string;
+  // export_dir as the UI shows it; null when nothing is exported.
+  exportPath: string | null;
 }
 
 /** A box as one diagram draws it: a foreign box shows its title only. */
@@ -103,7 +107,7 @@ export interface View {
 export type AllPositions = Record<string, Record<string, Position>>;
 
 export type SaveOutcome =
-  | { ok: true; saved: string; revision: string }
+  | { ok: true; saved: string; revision: string; exported?: number; exportError?: string }
   | { ok: false; conflict: boolean; message: string };
 
 // The server opens the page as /?token=…; every API call must send it back.

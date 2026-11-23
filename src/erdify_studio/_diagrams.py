@@ -93,13 +93,15 @@ class Pending(TypedDict):
 
     ``placed``: boxes placed automatically, over all diagrams. ``diagrams``: how many
     diagrams have such boxes. ``dropped``: stale entries plus stale diagrams.
-    ``created``: there is no layout file yet.
+    ``created``: there is no layout file yet. ``svgs``: exported SVGs that are missing,
+    out of date or stale (``_export.build_studio`` fills it; 0 here).
     """
 
     placed: int
     diagrams: int
     dropped: int
     created: bool
+    svgs: int
 
 
 class DiagramJson(TypedDict):
@@ -131,6 +133,7 @@ class Diagrams(TypedDict):
     pending: Pending
     layoutPath: str
     projectPath: str
+    exportPath: str | None
 
 
 #: Labels of the diagrams that aren't named after a group.
@@ -223,6 +226,7 @@ def build_diagrams(project: Project, config: StudioConfig, *, shown_path: str) -
         "pending": _pending(result),
         "layoutPath": shown_path,
         "projectPath": str(project.settings.input),
+        "exportPath": None,
     }
 
 
@@ -392,4 +396,5 @@ def _pending(result: PlaceResult) -> Pending:
         "diagrams": len({diagram for diagram, _ in result.placed}),
         "dropped": len(result.removed) + len(result.removed_diagrams),
         "created": result.created,
+        "svgs": 0,
     }

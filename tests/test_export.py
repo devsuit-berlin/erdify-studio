@@ -7,11 +7,13 @@ import erdify
 import pytest
 
 from erdify_studio import DEFAULT_GROUP, OVERVIEW, StudioConfig, load_config, place_project
+from erdify_studio._diagrams import Diagrams
 from erdify_studio._errors import ExportError
 from erdify_studio._export import (
     ExportResult,
     OutOfDateLayoutError,
     SvgProblem,
+    build_studio,
     check_exports,
     export_files,
     export_paths,
@@ -358,3 +360,36 @@ def test_cli_check_without_export_dir_is_unchanged(
     root = _project(tmp_path, studio="")
     monkeypatch.chdir(root)
     assert _run(["check"], capsys) == (0, "", "")
+
+
+# --- studio ------------------------------------------------------------------------
+
+
+def _studio(root: Path) -> Diagrams:
+    project, config = _load(root)
+    return build_studio(project, config, shown_path="erdify-layout.json")
+
+
+def test_studio_without_export_dir_has_no_svgs_pending(tmp_path: Path) -> None:
+    payload = _studio(_project(tmp_path, studio=""))
+    assert (payload["pending"]["svgs"], payload["exportPath"]) == (0, None)
+
+
+def test_studio_counts_outdated_svgs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = _project(tmp_path)
+    monkeypatch.chdir(root)
+    assert _studio(root)["pending"]["svgs"] == 3  # nothing exported yet
+    _export(root)
+    assert _studio(root)["pending"]["svgs"] == 0
+    (root / "shop" / "models.py").write_text(
+        MODELS.replace(
+            "    id: int = Field(primary_key=True)\n\n\nclass Invoice",
+            "    id: int = Field(primary_key=True)\n    email: str\n\n\nclass Invoice",
+        )
+    )
+    payload = _studio(root)
+    assert (payload["pending"]["svgs"], payload["exportPath"]) == (2, "docs/erd")
+
+
+def test_studio_counts_no_svgs_while_the_layout_is_out_of_date(tmp_path: Path) -> None:
+    assert _studio(_project(tmp_path, place=False))["pending"]["svgs"] == 0

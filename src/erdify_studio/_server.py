@@ -6,7 +6,7 @@ DNS rebinding) and, when it has one, as ``Origin``; the API also needs the rando
 token of the URL the browser was opened with.
 
 Routes: ``GET /`` and ``GET /assets/*`` (the built frontend), ``GET /api/diagrams``
-(``build_diagrams``) and ``PUT /api/layout`` (``save_diagrams``).
+(``build_studio``) and ``PUT /api/layout`` (``save_diagrams``, then the SVG export).
 
 The project is loaded again for every API request, so a reload after a ``git
 checkout`` or a model change shows the current models instead of treating their
@@ -30,8 +30,9 @@ import erdify
 from erdify import Project
 
 from erdify_studio._config import StudioConfig
-from erdify_studio._diagrams import build_diagrams, save_diagrams
+from erdify_studio._diagrams import save_diagrams
 from erdify_studio._errors import LayoutConflictError, PositionsError, StudioError
+from erdify_studio._export import build_studio, export_project
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +208,7 @@ class _Handler(BaseHTTPRequestHandler):
     def _diagrams(self) -> None:
         try:
             project, config = self.server.load()
-            diagrams = build_diagrams(project, config, shown_path=self.server.shown_path)
+            diagrams = build_studio(project, config, shown_path=self.server.shown_path)
         except _LOAD_ERRORS as e:
             self._error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
             return
@@ -224,6 +225,7 @@ class _Handler(BaseHTTPRequestHandler):
             with self.server.save_lock:
                 project, config = self.server.load()
                 revision = save_diagrams(project, config, payload["diagrams"], payload["revision"])
+                exported = self._export(project, config)
         except PositionsError as e:
             self._error(HTTPStatus.BAD_REQUEST, str(e))
         except LayoutConflictError as e:
@@ -233,7 +235,22 @@ class _Handler(BaseHTTPRequestHandler):
         except Exception:
             self._internal_error()
         else:
-            self._json(HTTPStatus.OK, {"saved": self.server.shown_path, "revision": revision})
+            self._json(
+                HTTPStatus.OK, {"saved": self.server.shown_path, "revision": revision, **exported}
+            )
+
+    def _export(self, project: Project, config: StudioConfig) -> dict[str, int | str]:
+        """Export the SVGs after a save: ``exported`` (files written or deleted) or
+        ``exportError``. The layout is saved either way, so a failure is not an error
+        response: the page must still take the new revision."""
+        if config.export_dir is None:
+            return {}
+        try:
+            result = export_project(project, config)
+        except (StudioError, OSError) as e:
+            logger.info(f"SVG export after save failed: {e}")
+            return {"exportError": str(e)}
+        return {"exported": len(result.written) + len(result.deleted)}
 
     def _body(self) -> dict[str, Any] | None:
         """The JSON object of a save request; None after an error response."""

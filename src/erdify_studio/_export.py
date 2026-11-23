@@ -20,7 +20,7 @@ from erdify import Project
 
 from erdify_studio._check import Problem, check_project
 from erdify_studio._config import StudioConfig
-from erdify_studio._diagrams import build_diagrams
+from erdify_studio._diagrams import Diagrams, build_diagrams
 from erdify_studio._errors import ExportError
 from erdify_studio._layout import DEFAULT_GROUP, OVERVIEW
 from erdify_studio._svg import render_svg
@@ -152,6 +152,32 @@ def check_exports(project: Project, config: StudioConfig) -> list[SvgProblem]:
             problems.append(SvgProblem(directory / relative, "outdated"))
     problems += [SvgProblem(directory / r, "stale") for r in _stale(directory, files)]
     return sorted(problems, key=lambda p: p.path.as_posix())
+
+
+def build_studio(project: Project, config: StudioConfig, *, shown_path: str) -> Diagrams:
+    """``build_diagrams`` plus what studio shows about the SVGs in ``export_dir``.
+
+    ``pending.svgs`` counts the SVGs ``check`` would report; it stays 0 without
+    ``export_dir``, while the layout file is out of date (Save fixes both at once), and
+    when two groups would share a file (Save reports that). ``exportPath`` is
+    ``export_dir`` as the UI shows it.
+    """
+    payload = build_diagrams(project, config, shown_path=shown_path)
+    if config.export_dir is None:
+        return payload
+    payload["exportPath"] = _shown(config.export_dir)
+    try:
+        payload["pending"]["svgs"] = len(check_exports(project, config))
+    except ExportError:
+        pass
+    return payload
+
+
+def _shown(path: Path) -> str:
+    try:
+        return str(path.relative_to(Path.cwd()))
+    except ValueError:
+        return str(path)
 
 
 def _export_dir(config: StudioConfig) -> Path:
