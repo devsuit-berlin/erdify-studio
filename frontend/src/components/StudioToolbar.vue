@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{ title: string; dirty: boolean; saveable: boolean; saving: boolean }>();
+defineProps<{ title: string; dirty: boolean; saveable: boolean; saving: boolean; downloading: boolean }>();
 defineEmits<{ save: []; download: [] }>();
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -15,6 +15,8 @@ const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
       label="Download SVG"
       color="neutral"
       variant="outline"
+      :loading="downloading"
+      :disabled="downloading"
       @click="$emit('download')"
     />
     <UButton

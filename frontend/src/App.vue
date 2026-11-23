@@ -153,9 +153,17 @@ async function save(): Promise<void> {
   }
 }
 
+const downloading = ref(false);
+
 async function download(): Promise<void> {
-  if (!loaded.value) return;
-  const outcome = await downloadSvg(current.value, positions.value[current.value]);
+  if (!loaded.value || downloading.value) return;
+  downloading.value = true;
+  let outcome;
+  try {
+    outcome = await downloadSvg(current.value, positions.value[current.value]);
+  } finally {
+    downloading.value = false;
+  }
   if (outcome.ok) return;
   showError(
     outcome.conflict
@@ -215,7 +223,7 @@ onBeforeUnmount(() => {
 <template>
   <UApp>
     <div class="flex h-screen flex-col">
-      <StudioToolbar :title="diagram?.label ?? 'Overview'" :dirty="dirty" :saveable="saveable" :saving="saving" @save="save" @download="download" />
+      <StudioToolbar :title="diagram?.label ?? 'Overview'" :dirty="dirty" :saveable="saveable" :saving="saving" :downloading="downloading" @save="save" @download="download" />
       <UAlert v-if="banner" :title="banner" color="primary" variant="subtle" icon="i-lucide-sparkles" class="rounded-none" />
       <div class="flex min-h-0 flex-1">
         <DiagramList

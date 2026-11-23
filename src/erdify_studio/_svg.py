@@ -58,7 +58,8 @@ def format_number(value: float) -> str:
     return "0" if text in ("-0", "") else text
 
 
-_NOT_ID = re.compile(r"[^A-Za-z0-9_-]+")
+# Letters of any script are valid in XML ids; everything else becomes "-".
+_NOT_ID = re.compile(r"[^\w-]+")
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?(?:e[-+]?\d+)?")
 
 

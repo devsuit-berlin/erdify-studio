@@ -22,7 +22,7 @@ from erdify import Project
 
 from erdify_studio._check import Problem, check_project
 from erdify_studio._config import StudioConfig
-from erdify_studio._diagrams import Diagrams, _checked, build_diagrams
+from erdify_studio._diagrams import Diagrams, build_diagrams, checked_positions
 from erdify_studio._errors import ExportError, LayoutConflictError, LayoutError, PositionsError
 from erdify_studio._layout import DEFAULT_GROUP, OVERVIEW, Layout
 from erdify_studio._svg import render_svg
@@ -208,7 +208,7 @@ def render_download(
         )
     shown = frozenset(found["own"]) | frozenset(found["foreign"])
     layout = Layout()
-    for key, (x, y) in _checked(positions, shown).items():
+    for key, (x, y) in checked_positions(positions, shown).items():
         try:
             layout.set_position(diagram, key, x, y)
         except LayoutError as e:

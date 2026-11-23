@@ -303,6 +303,10 @@ class _Handler(BaseHTTPRequestHandler):
         except (StudioError, OSError) as e:
             logger.info(f"SVG export after save failed: {e}")
             return {"exportError": str(e)}
+        except Exception:
+            # A bug, but the layout is saved: the page must still take the new revision.
+            logger.exception("SVG export after save failed")
+            return {"exportError": "internal error (see the terminal)"}
         return {"exported": len(result.written) + len(result.deleted)}
 
     def _body(self) -> dict[str, Any] | None:

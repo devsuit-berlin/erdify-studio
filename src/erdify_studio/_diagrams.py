@@ -271,7 +271,7 @@ def save_diagrams(
     layout = Layout()
     for name, content in contents.items():
         layout.add_diagram(name)
-        for key, (x, y) in _checked(diagrams[name], content.shown).items():
+        for key, (x, y) in checked_positions(diagrams[name], content.shown).items():
             try:
                 layout.set_position(name, key, x, y)
             except LayoutError as e:
@@ -282,7 +282,7 @@ def save_diagrams(
     return layout_revision(config.layout)
 
 
-def _checked(positions: object, shown: frozenset[str]) -> dict[str, tuple[float, float]]:
+def checked_positions(positions: object, shown: frozenset[str]) -> dict[str, tuple[float, float]]:
     """``positions`` narrowed to key -> ``(x, y)`` numbers, with exactly the ``shown`` keys."""
     if not isinstance(positions, Mapping):
         raise PositionsError(f"positions must be an object, got {type(positions).__name__!r}")

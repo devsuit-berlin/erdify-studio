@@ -14,7 +14,7 @@ from pathlib import Path
 import erdify
 import pytest
 
-from erdify_studio import OVERVIEW, Layout, load_config, save_layout
+from erdify_studio import OVERVIEW, Layout, load_config, place_project, save_layout
 from erdify_studio._diagrams import DiagramJson, Diagrams, build_diagrams
 from erdify_studio._svg import format_number, render_svg
 
@@ -202,5 +202,30 @@ def test_clip_ids_differ_between_diagrams(tmp_path: Path) -> None:
     payload = _payload(_project(tmp_path))
     ids = [
         set(re.findall(r'<clipPath id="([^"]+)"', _render(payload, n))) for n in (OVERVIEW, "core")
+    ]
+    assert ids[0] and ids[1] and not ids[0] & ids[1]
+
+
+def test_clip_ids_differ_between_non_latin_groups(tmp_path: Path) -> None:
+    models = (
+        MODELS.replace('"schema": "core"', '"schema": "Заказы"')
+        .replace('"schema": "billing"', '"schema": "顧客"')
+        .replace('foreign_key="core.customers.id"', 'foreign_key="Заказы.customers.id"')
+        .replace('foreign_key="billing.invoices.id"', 'foreign_key="顧客.invoices.id"')
+    )
+    root = tmp_path
+    root.mkdir(exist_ok=True)
+    (root / "pyproject.toml").write_text(
+        '[tool.erdify]\ninclude = ["**/models.py"]\n[tool.erdify-studio]\n'
+    )
+    package = root / "shop"
+    package.mkdir()
+    (package / "__init__.py").write_text("")
+    (package / "models.py").write_text(models, encoding="utf-8")
+    project = erdify.load_project(root, strict=True)
+    place_project(project, load_config(project.settings.pyproject))
+    payload = _payload(root)
+    ids = [
+        set(re.findall(r'<clipPath id="([^"]+)"', _render(payload, n))) for n in ("Заказы", "顧客")
     ]
     assert ids[0] and ids[1] and not ids[0] & ids[1]

@@ -524,3 +524,13 @@ def test_a_save_whose_export_breaks_still_answers_200(exporting: Studio) -> None
     result = _json(body)
     assert (status, "exportError" in result) == (200, True)
     assert result["revision"] == layout_revision(exporting.root / SHOWN)
+
+
+def test_an_unexpected_export_error_after_save_still_answers_200(
+    exporting: Studio, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("erdify_studio._server.export_project", _crash)
+    status, _, body = exporting.put_layout({"revision": None, "diagrams": _diagrams(exporting)})
+    result = _json(body)
+    assert (status, result["exportError"]) == (200, "internal error (see the terminal)")
+    assert result["revision"] == layout_revision(exporting.root / SHOWN)
