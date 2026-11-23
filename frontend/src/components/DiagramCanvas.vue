@@ -25,6 +25,8 @@ const emit = defineEmits<{
   view: [view: View];
   /** A foreign box was clicked (not dragged): open its entity's group diagram. */
   open: [key: string];
+  /** A box drag started (true) or ended (false): the page holds reloads meanwhile. */
+  dragging: [active: boolean];
 }>();
 
 /** Pointer travel below which a press on a foreign box is a click, not a drag. */
@@ -162,6 +164,10 @@ const dragging = ref<{
   // Set once the pointer travelled CLICK_SLOP: from then on it is a drag.
   moved: boolean;
 } | null>(null);
+watch(
+  () => dragging.value !== null,
+  (active) => emit("dragging", active),
+);
 
 // The dragged box is drawn last, on top of the others.
 const ordered = computed(() => {

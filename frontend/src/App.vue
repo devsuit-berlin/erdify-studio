@@ -1,7 +1,18 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
-import { downloadSvg, fetchDiagrams, saveLayout, type AllPositions, type DiagramJson, type Diagrams, type Position, type View } from "./api";
+import {
+  downloadSvg,
+  fetchDiagrams,
+  fetchStatus,
+  mergeDiagrams,
+  saveLayout,
+  type AllPositions,
+  type DiagramJson,
+  type Diagrams,
+  type Position,
+  type View,
+} from "./api";
 import DiagramCanvas from "./components/DiagramCanvas.vue";
 import DiagramList from "./components/DiagramList.vue";
 import StudioToolbar from "./components/StudioToolbar.vue";
@@ -26,6 +37,20 @@ const moved = ref<Set<string>>(new Set());
 // Drags per diagram, so a save only clears the diagrams nothing moved in while it ran.
 const edits: Record<string, number> = {};
 const saving = ref(false);
+
+// Live reload: the server re-parses the models; the page polls what changed.
+const POLL_MS = 1000;
+// The model fingerprint the page shows (from GET /api/status).
+const model = ref<string | null>(null);
+// Why the server shows the last good state (a model file that can't be loaded).
+const loadIssue = ref<string | null>(null);
+// The layout file on disk differs from the one this page read or wrote.
+const layoutChanged = ref(false);
+const serverGone = ref(false);
+const draggingBox = ref(false);
+let polling = false;
+let failedPolls = 0;
+let pollTimer: number | undefined;
 
 // Only outdated SVGs: Save fixes them, but nothing was edited — no "Unsaved changes"
 // badge, no prompt on leaving.
@@ -106,6 +131,59 @@ function onView(view: View): void {
   views[current.value] = view;
 }
 
+// Show a payload: positions, NEW marks (kept for boxes that are still there) and what
+// Save would change. Used on load and after every model change.
+function apply(data: Diagrams, { initial }: { initial: boolean }): void {
+  const before = newKeys.value;
+  positions.value = Object.fromEntries(data.diagrams.map((d) => [d.name, { ...d.positions }]));
+  newKeys.value = Object.fromEntries(
+    data.diagrams.map((d) => {
+      const kept = initial ? [] : [...(before[d.name] ?? [])].filter((key) => key in d.positions);
+      return [d.name, new Set([...d.new, ...kept])];
+    }),
+  );
+  if (initial) revision.value = data.revision;
+  const { placed, dropped, created, svgs } = data.pending;
+  pendingShown.value = created || placed > 0 || dropped > 0 || svgs > 0;
+  moved.value = new Set([...moved.value].filter((name) => data.diagrams.some((d) => d.name === name)));
+  loaded.value = data;
+  if (!data.diagrams.some((d) => d.name === current.value)) select(OVERVIEW);
+}
+
+// The models changed: merge the positions on screen into them (drags are kept).
+async function reloadModels(): Promise<void> {
+  const before = new Set(Object.keys(positions.value[OVERVIEW] ?? {}));
+  const data = await mergeDiagrams(positions.value);
+  apply(data, { initial: false });
+  const after = new Set(Object.keys(positions.value[OVERVIEW] ?? {}));
+  const added = [...after].filter((key) => !before.has(key)).length;
+  const removed = [...before].filter((key) => !after.has(key)).length;
+  const parts = [added && `${added} new`, removed && `${removed} removed`].filter(Boolean);
+  if (parts.length) toast.add({ title: `Models changed: ${parts.join(", ")}`, icon: "i-lucide-refresh-cw" });
+}
+
+async function poll(): Promise<void> {
+  if (polling || saving.value || draggingBox.value || document.visibilityState !== "visible") return;
+  if (!loaded.value) return;
+  polling = true;
+  try {
+    const status = await fetchStatus();
+    failedPolls = 0;
+    serverGone.value = false;
+    loadIssue.value = status.error;
+    layoutChanged.value = status.revision !== revision.value;
+    if (status.model !== model.value) {
+      if (model.value !== null) await reloadModels();
+      model.value = status.model;
+    }
+  } catch {
+    failedPolls += 1;
+    serverGone.value = failedPolls >= 3;
+  } finally {
+    polling = false;
+  }
+}
+
 function onMove(key: string, position: Position): void {
   const name = current.value;
   positions.value = { ...positions.value, [name]: { ...positions.value[name], [key]: position } };
@@ -121,6 +199,7 @@ async function save(): Promise<void> {
     const outcome = await saveLayout(revision.value, positions.value);
     if (outcome.ok) {
       revision.value = outcome.revision;
+      layoutChanged.value = false;
       moved.value = new Set([...moved.value].filter((name) => edits[name] !== editsAtSave[name]));
       newKeys.value = {};
       toast.remove(SAVE_ERROR);
@@ -141,9 +220,13 @@ async function save(): Promise<void> {
         pendingShown.value = false;
         toast.add({ title: `Saved to ${outcome.saved}`, color: "success", icon: "i-lucide-check" });
       }
+    } else if (outcome.conflict && outcome.reason === "models") {
+      // The files changed in the second before the next poll: catch up, keep the drags.
+      await reloadModels().catch(() => undefined);
+      showError("The models changed while saving — updated, save again.");
     } else if (outcome.conflict) {
       showError(
-        "The layout file or the models changed since this page loaded (on disk or from another tab). Reload to get them — saving now would overwrite them.",
+        "The layout file changed since this page loaded (on disk or from another tab). Reload to get it — saving now would overwrite it.",
       );
     } else {
       showError(`Could not save: ${outcome.message}`);
@@ -199,13 +282,12 @@ onMounted(async () => {
   window.addEventListener("beforeunload", onBeforeUnload);
   window.addEventListener("hashchange", onHashChange);
   try {
+    const status = await fetchStatus();
     const data = await fetchDiagrams();
-    positions.value = Object.fromEntries(data.diagrams.map((d) => [d.name, { ...d.positions }]));
-    newKeys.value = Object.fromEntries(data.diagrams.map((d) => [d.name, new Set(d.new)]));
-    revision.value = data.revision;
-    const { placed, dropped, created, svgs } = data.pending;
-    pendingShown.value = created || placed > 0 || dropped > 0 || svgs > 0;
-    loaded.value = data;
+    model.value = status.model;
+    loadIssue.value = status.error;
+    apply(data, { initial: true });
+    pollTimer = window.setInterval(() => void poll(), POLL_MS);
     // An unknown name in the hash is replaced, so the URL names what is shown.
     if (hashDiagram() !== null) select(hashTarget());
   } catch (error) {
@@ -217,6 +299,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKey);
   window.removeEventListener("beforeunload", onBeforeUnload);
   window.removeEventListener("hashchange", onHashChange);
+  window.clearInterval(pollTimer);
 });
 </script>
 
@@ -224,6 +307,30 @@ onBeforeUnmount(() => {
   <UApp>
     <div class="flex h-screen flex-col">
       <StudioToolbar :title="diagram?.label ?? 'Overview'" :dirty="dirty" :saveable="saveable" :saving="saving" :downloading="downloading" @save="save" @download="download" />
+      <UAlert
+        v-if="serverGone"
+        title="erdify-studio is not running any more."
+        color="error"
+        variant="subtle"
+        icon="i-lucide-plug-zap"
+        class="rounded-none"
+      />
+      <UAlert
+        v-if="loadIssue"
+        :title="`${loadIssue} — showing the last good state.`"
+        color="error"
+        variant="subtle"
+        icon="i-lucide-file-warning"
+        class="rounded-none"
+      />
+      <UAlert
+        v-if="layoutChanged"
+        title="The layout file changed on disk. Reload to get it — saving now would overwrite it."
+        color="warning"
+        variant="subtle"
+        icon="i-lucide-triangle-alert"
+        class="rounded-none"
+      />
       <UAlert v-if="banner" :title="banner" color="primary" variant="subtle" icon="i-lucide-sparkles" class="rounded-none" />
       <div class="flex min-h-0 flex-1">
         <DiagramList
@@ -257,6 +364,7 @@ onBeforeUnmount(() => {
             :focus-key="focusKey"
             @move="onMove"
             @open="onOpen"
+            @dragging="draggingBox = $event"
             @view="onView"
           />
         </main>
