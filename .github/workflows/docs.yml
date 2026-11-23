@@ -28,14 +28,16 @@ jobs:
       - name: Build the site
         run: uv run --frozen --group docs mkdocs build --strict
       - name: Upload the Pages artifact
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && !github.event.repository.private
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: site
 
   deploy:
     name: Deploy to GitHub Pages
-    if: github.event_name == 'push'
+    # GitHub Pages needs a public repository on the Free plan: until then the site is
+    # only built (and checked); the deploy starts once the repository is public.
+    if: github.event_name == 'push' && !github.event.repository.private
     needs: build
     runs-on: ubuntu-latest
     # One deploy at a time, in order: an older build must not overwrite a newer site.

@@ -10,7 +10,8 @@ In a project erdify already reads (`[tool.erdify]` in `pyproject.toml`):
 
 2. Drag the boxes into the arrangement your team reads; switch between the overview and
    the group diagrams on the left.
-3. **Save** (Ctrl/⌘+S) writes `erdify-layout.json` next to `pyproject.toml`.
+3. **Save** (Ctrl/⌘+S) writes the layout file (default: `erdify-layout.json` next to
+   `pyproject.toml`).
 4. Commit it, and add the check to CI or pre-commit ([how](usage/ci.md)):
 
     ```bash
