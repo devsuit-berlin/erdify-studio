@@ -25,6 +25,7 @@ from erdify_studio._geometry import (
     edge_line,
     end_marker,
     fan_offsets,
+    fixed2,
     self_loop,
 )
 
@@ -53,16 +54,11 @@ _LOOP_STEP = 20
 
 
 def format_number(value: float) -> str:
-    """``value`` rounded to 2 decimals, without trailing zeros; ``-0`` is ``0``.
-
-    Snapped to 9 decimals first: platform maths libraries (``cos``, ``atan2``) may
-    differ by an ulp, which must not flip a value on either side of a ``.xx5`` tie.
-    """
-    text = f"{round(value, 9):.2f}".rstrip("0").rstrip(".")
+    """``value`` rounded to 2 decimals (``fixed2``), without trailing zeros; ``-0`` is ``0``."""
+    text = fixed2(value).rstrip("0").rstrip(".")
     return "0" if text in ("-0", "") else text
 
 
-# Letters of any script are valid in XML ids; everything else becomes "-".
 _NOT_ID = re.compile(r"[^\w-]+")
 _NUMBER = re.compile(r"-?\d+(?:\.\d+)?(?:e[-+]?\d+)?")
 

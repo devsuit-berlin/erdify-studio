@@ -96,7 +96,7 @@ def export_paths(diagrams: Iterable[str]) -> dict[str, PurePosixPath]:
         if path in owners:
             raise ExportError(
                 f"{_described(owners[path])} and {_described(name)} would both be exported "
-                f"as {str(path)!r}; rename the group"
+                f"as {str(path)!r}; rename one of the groups"
             )
         owners[path] = name
         paths[name] = path

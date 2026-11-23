@@ -12,6 +12,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
+from decimal import ROUND_HALF_UP, Decimal
 
 #: Distance between parallel edges of the same two boxes (``FAN_STEP`` in drawing.ts).
 FAN_STEP = 16
@@ -57,9 +58,16 @@ def js_number(value: float) -> str:
     return repr(value)
 
 
-def _fixed(value: float) -> str:
-    """JavaScript's ``value.toFixed(2)`` (snapped to 9 decimals: see ``format_number``)."""
-    return f"{round(value, 9):.2f}"
+def fixed2(value: float) -> str:
+    """``value`` with 2 decimals, as JavaScript's ``toFixed(2)`` rounds: ties away from zero.
+
+    Snapped to 9 decimals first, so an ulp of difference between platform maths
+    libraries (``cos``, ``atan2``) can't flip a value on either side of a ``.xx5`` tie.
+    ``toFixed`` rounds the exact binary value instead, so the two may differ by one
+    unit in the last place right next to a tie (``scripts/check_geometry.py`` allows it).
+    """
+    snapped = Decimal(repr(round(value, 9)))
+    return str(snapped.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def _before(a: str, b: str) -> bool:
@@ -149,8 +157,8 @@ def end_marker(point: Point, direction: float, *, optional: bool, many: bool) ->
 
     def at(along: float, across: float) -> tuple[str, str]:
         return (
-            _fixed(point[0] + along * cos - across * sin),
-            _fixed(point[1] + along * sin + across * cos),
+            fixed2(point[0] + along * cos - across * sin),
+            fixed2(point[1] + along * sin + across * cos),
         )
 
     def segment(a: tuple[float, float], b: tuple[float, float]) -> str:

@@ -88,3 +88,8 @@ def test_keys_are_ordered_like_javascript_strings() -> None:
     """JS compares UTF-16 code units: an emoji (surrogate D83D) sorts before U+FFFD."""
     a, b = BOX, Rect(300, 0, 100, 50)
     assert edge_line(a, b, 16, "\U0001f600", "�") == edge_line(a, b, 16, "a", "b")
+
+
+def test_marker_numbers_round_ties_like_to_fixed() -> None:
+    marker = end_marker((0.125, 0), 0, optional=False, many=False)
+    assert marker.lines.startswith("M 6.13 -7.00")

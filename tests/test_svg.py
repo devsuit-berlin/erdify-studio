@@ -109,8 +109,8 @@ def _render(payload: Diagrams, name: str = OVERVIEW) -> str:
         (12.5, "12.5"),
         (12.50, "12.5"),
         (3.0, "3"),
-        (2.675, "2.67"),  # the binary value is below .675: rounds down, as everywhere
-        (-7.125, "-7.12"),
+        (0.125, "0.13"),  # an exact tie rounds away from zero, like toFixed(2)
+        (-7.125, "-7.13"),
         (123456, "123456"),
         (1e-7, "0"),
     ],
@@ -233,4 +233,4 @@ def test_clip_ids_differ_between_non_latin_groups(tmp_path: Path) -> None:
 
 def test_format_number_is_stable_next_to_a_tie() -> None:
     """Platform maths libraries may differ by an ulp; both sides of a tie print alike."""
-    assert format_number(1.125 + 1e-12) == format_number(1.125 - 1e-12)
+    assert format_number(1.125 + 1e-12) == format_number(1.125 - 1e-12) == "1.13"
