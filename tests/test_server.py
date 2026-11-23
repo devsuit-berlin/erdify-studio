@@ -107,7 +107,10 @@ def _static(root: Path) -> Path:
 @pytest.fixture
 def studio(tmp_path: Path) -> Iterator[Studio]:
     root = _project(tmp_path / "project")
-    server = start_server(_loader(root), static_dir=_static(tmp_path), shown_path=SHOWN)
+    # No watcher ticks during a test: tests call `refresh()` themselves.
+    server = start_server(
+        _loader(root), static_dir=_static(tmp_path), shown_path=SHOWN, min_interval=3600
+    )
     thread = threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True)
     thread.start()
     try:
@@ -413,7 +416,10 @@ def exporting(tmp_path: Path) -> Iterator[Studio]:
     (root / "pyproject.toml").write_text(
         '[tool.erdify]\ninclude = ["**/models.py"]\n[tool.erdify-studio]\nexport_dir = "erd"\n'
     )
-    server = start_server(_loader(root), static_dir=_static(tmp_path), shown_path=SHOWN)
+    # No watcher ticks during a test: tests call `refresh()` themselves.
+    server = start_server(
+        _loader(root), static_dir=_static(tmp_path), shown_path=SHOWN, min_interval=3600
+    )
     thread = threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True)
     thread.start()
     try:
@@ -656,16 +662,23 @@ def test_save_during_a_load_error_uses_the_last_good_state(studio: Studio) -> No
 
 def test_the_interval_is_at_least_twice_the_parse_time(tmp_path: Path) -> None:
     root = _project(tmp_path / "project")
+    now = [100.0]
+
+    def clock() -> float:
+        return now[0]
+
     load = _loader(root)
 
     def slow() -> Any:
-        time.sleep(0.05)
+        now[0] += 0.4  # the load "takes" 0.4 s on the injected clock
         return load()
 
-    server = start_server(slow, static_dir=_static(tmp_path), shown_path=SHOWN, min_interval=0.01)
+    server = start_server(
+        slow, static_dir=_static(tmp_path), shown_path=SHOWN, min_interval=0.01, clock=clock
+    )
     try:
         server.refresh()
-        assert server.interval() >= 0.1
+        assert server.interval() == pytest.approx(0.8)
     finally:
         server.server_close()
 

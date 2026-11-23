@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import type { BoxDef, DiagramJson, DrawnBox, Metrics, Position, View } from "../api";
 import { FIT_MARGIN, MAX_ZOOM, MIN_ZOOM } from "../drawing";
@@ -168,6 +168,10 @@ watch(
   () => dragging.value !== null,
   (active) => emit("dragging", active),
 );
+// Unmounted mid-drag (the diagram switched): the page must not wait for a drag end.
+onBeforeUnmount(() => {
+  if (dragging.value !== null) emit("dragging", false);
+});
 
 // The dragged box is drawn last, on top of the others.
 const ordered = computed(() => {

@@ -50,6 +50,11 @@ const serverGone = ref(false);
 const draggingBox = ref(false);
 let polling = false;
 let failedPolls = 0;
+// Bumped by every drag and every save: a merge that started before one of them would
+// overwrite it, so its response is dropped (the next poll merges again).
+let localVersion = 0;
+// Why the last merge of changed models failed (shown until a merge works again).
+const mergeIssue = ref<string | null>(null);
 let pollTimer: number | undefined;
 
 // Only outdated SVGs: Save fixes them, but nothing was edited — no "Unsaved changes"
@@ -151,15 +156,20 @@ function apply(data: Diagrams, { initial }: { initial: boolean }): void {
 }
 
 // The models changed: merge the positions on screen into them (drags are kept).
-async function reloadModels(): Promise<void> {
+// Returns false when the response was dropped because something moved or saved
+// meanwhile; the caller then merges again on the next poll.
+async function reloadModels(): Promise<boolean> {
   const before = new Set(Object.keys(positions.value[OVERVIEW] ?? {}));
+  const version = localVersion;
   const data = await mergeDiagrams(positions.value);
+  if (version !== localVersion || draggingBox.value) return false;
   apply(data, { initial: false });
   const after = new Set(Object.keys(positions.value[OVERVIEW] ?? {}));
   const added = [...after].filter((key) => !before.has(key)).length;
   const removed = [...before].filter((key) => !after.has(key)).length;
   const parts = [added && `${added} new`, removed && `${removed} removed`].filter(Boolean);
   if (parts.length) toast.add({ title: `Models changed: ${parts.join(", ")}`, icon: "i-lucide-refresh-cw" });
+  return true;
 }
 
 async function poll(): Promise<void> {
@@ -173,8 +183,12 @@ async function poll(): Promise<void> {
     loadIssue.value = status.error;
     layoutChanged.value = status.revision !== revision.value;
     if (status.model !== model.value) {
-      if (model.value !== null) await reloadModels();
-      model.value = status.model;
+      try {
+        if (model.value === null || (await reloadModels())) model.value = status.model;
+        mergeIssue.value = null;
+      } catch (error) {
+        mergeIssue.value = error instanceof Error ? error.message : String(error);
+      }
     }
   } catch {
     failedPolls += 1;
@@ -189,6 +203,7 @@ function onMove(key: string, position: Position): void {
   positions.value = { ...positions.value, [name]: { ...positions.value[name], [key]: position } };
   moved.value = new Set([...moved.value, name]);
   edits[name] = (edits[name] ?? 0) + 1;
+  localVersion += 1;
 }
 
 async function save(): Promise<void> {
@@ -200,6 +215,7 @@ async function save(): Promise<void> {
     if (outcome.ok) {
       revision.value = outcome.revision;
       layoutChanged.value = false;
+      localVersion += 1;
       moved.value = new Set([...moved.value].filter((name) => edits[name] !== editsAtSave[name]));
       newKeys.value = {};
       toast.remove(SAVE_ERROR);
@@ -222,7 +238,9 @@ async function save(): Promise<void> {
       }
     } else if (outcome.conflict && outcome.reason === "models") {
       // The files changed in the second before the next poll: catch up, keep the drags.
-      await reloadModels().catch(() => undefined);
+      await reloadModels().catch((error: unknown) => {
+        mergeIssue.value = error instanceof Error ? error.message : String(error);
+      });
       showError("The models changed while saving — updated, save again.");
     } else if (outcome.conflict) {
       showError(
@@ -321,6 +339,14 @@ onBeforeUnmount(() => {
         color="error"
         variant="subtle"
         icon="i-lucide-file-warning"
+        class="rounded-none"
+      />
+      <UAlert
+        v-if="mergeIssue"
+        :title="`Could not update the diagram: ${mergeIssue}`"
+        color="error"
+        variant="subtle"
+        icon="i-lucide-circle-alert"
         class="rounded-none"
       />
       <UAlert

@@ -106,8 +106,10 @@ class StudioServer(ThreadingHTTPServer):
         static_dir: Path,
         shown_path: str,
         min_interval: float = 1.0,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.load = load
+        self._clock = clock
         self.static_dir = static_dir.resolve()
         self.shown_path = shown_path
         self.token = secrets.token_urlsafe(32)
@@ -116,10 +118,10 @@ class StudioServer(ThreadingHTTPServer):
         self._snapshot_lock = threading.Lock()
         self._stop = threading.Event()
         self._watcher: threading.Thread | None = None
-        started = time.monotonic()
+        started = clock()
         project, config = load()  # the first load must succeed, as `check` would
         self._snapshot = Snapshot(project, config, model_fingerprint(project, config))
-        self._load_seconds = time.monotonic() - started
+        self._load_seconds = clock() - started
         super().__init__(("127.0.0.1", port), _Handler)
 
     @property
@@ -143,20 +145,21 @@ class StudioServer(ThreadingHTTPServer):
 
     def refresh(self) -> None:
         """Load the project once; on failure keep the last good one and record why."""
-        started = time.monotonic()
+        started = self._clock()
         try:
             project, config = self.load()
             fingerprint = model_fingerprint(project, config)
         except _LOAD_ERRORS as e:
             logger.info(f"cannot load the project, showing the last good state: {e}")
-            self._set(replace(self.snapshot(), error=str(e)))
+            self._fail(str(e))
         except Exception:
             logger.exception("cannot load the project, showing the last good state")
-            self._set(replace(self.snapshot(), error="internal error (see the terminal)"))
+            self._fail("internal error (see the terminal)")
         else:
-            self._set(Snapshot(project, config, fingerprint))
+            with self._snapshot_lock:
+                self._snapshot = Snapshot(project, config, fingerprint)
         finally:
-            self._load_seconds = time.monotonic() - started
+            self._load_seconds = self._clock() - started
 
     def serve_forever(self, poll_interval: float = 0.5) -> None:
         """Serve, with the watcher thread running until ``shutdown``."""
@@ -184,9 +187,10 @@ class StudioServer(ThreadingHTTPServer):
             self._watcher.join()
             self._watcher = None
 
-    def _set(self, snapshot: Snapshot) -> None:
+    def _fail(self, error: str) -> None:
+        """Keep the last good project, record why the newest load failed."""
         with self._snapshot_lock:
-            self._snapshot = snapshot
+            self._snapshot = replace(self._snapshot, error=error)
 
 
 def start_server(
@@ -196,6 +200,7 @@ def start_server(
     static_dir: Path | None = None,
     shown_path: str,
     min_interval: float = 1.0,
+    clock: Callable[[], float] = time.monotonic,
 ) -> StudioServer:
     """Bind a studio server on 127.0.0.1 (not serving yet).
 
@@ -206,6 +211,7 @@ def start_server(
         static_dir: The built frontend to serve (default: ``STATIC_DIR``).
         shown_path: The layout file's path as the UI shows it.
         min_interval: Shortest time between two loads, in seconds.
+        clock: Measures how long a load takes (injected by tests).
 
     Raises:
         OSError: The port cannot be bound (e.g. it is in use).
@@ -217,6 +223,7 @@ def start_server(
         static_dir=static_dir or STATIC_DIR,
         shown_path=shown_path,
         min_interval=min_interval,
+        clock=clock,
     )
 
 
