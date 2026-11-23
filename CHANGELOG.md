@@ -10,8 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Entities that would share a layout key are keyed by erdify's entity name instead of
-  being refused: same-name model classes in different modules, which the next erdify
-  release draws as `module.Class` (erdify#367), and several classes of one table. A
+  being refused: same-name model classes in different modules, which erdify draws as
+  `module.Class` (erdify#367), and several classes of one table. A
   unique key is unchanged; `DuplicateKeyError` remains for a name key that equals
   another entity's key.
 - `erdify-studio [path]` (also `erdify-studio open`, with `--port` and `--no-browser`):
@@ -23,9 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   loaded is never overwritten (409, reload). The API needs a per-run token and checks
   `Host` / `Origin`; the built page loads nothing from the network
   (`scripts/check_static.py` in CI).
-- Requires erdify 1.8.0: the enums erdify draws (`erdify.enum_users`), same-name
-  tables in different schemas and schema-qualified foreign keys are laid out exactly
-  as erdify draws them.
+- Requires erdify 1.9.0: the enums erdify draws (`erdify.enum_users`), same-name
+  tables in different schemas, schema-qualified foreign keys and same-name model
+  classes in different modules (`module.Class`, erdify#367) are laid out exactly as
+  erdify draws them.
 - Package scaffold: `pip install erdify-studio` installs the `erdify-studio` command
   (`--help`, `--version`) with erdify as a dependency; `erdify-studio[sql]` pulls in
   `erdify[sql]`. The browser frontend is built in CI and shipped inside the wheel, so no
