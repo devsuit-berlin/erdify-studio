@@ -15,9 +15,13 @@ from erdify_studio import (
     Problem,
     ProjectError,
     check_project,
+    entity_keys,
     load_config,
+    load_layout,
+    place_project,
     save_layout,
 )
+from erdify_studio._overview import build_overview
 from erdify_studio.cli import main
 
 MODELS = """\
@@ -135,6 +139,40 @@ def test_entity_names_that_differ_from_their_keys(tmp_path: Path) -> None:
     config = load_config(project.settings.pyproject)
     save_layout(_complete(), config.layout)
     assert check_project(rekeyed, config) == check_project(project, config) != []
+
+
+def test_same_name_classes_in_two_modules_are_separate_entities(tmp_path: Path) -> None:
+    # erdify >= 1.9.0 (#367): one entity per class, named ``module.Class``, each with its
+    # own layout key; before, the class scanned last was the only one.
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.erdify]\ninclude = ["**/models.py"]\n[tool.erdify-studio]\ngroup_by = "none"\n'
+    )
+    for app in ("billing", "shipping"):
+        package = tmp_path / app
+        package.mkdir()
+        (package / "__init__.py").write_text("")
+        (package / "models.py").write_text(
+            "from sqlmodel import Field, SQLModel\n\n\n"
+            "class Address(SQLModel, table=True):\n"
+            "    id: int = Field(primary_key=True)\n"
+        )
+    project = erdify.load_project(tmp_path, strict=True)
+    assert sorted(project.entities) == ["billing.models.Address", "shipping.models.Address"]
+    assert entity_keys(project.entities) == {
+        "billing.models.Address": "billing.models.Address",
+        "shipping.models.Address": "shipping.models.Address",
+    }
+    config = load_config(project.settings.pyproject)
+    keys = ["billing.models.Address", "shipping.models.Address"]
+    # place --auto lays out both, apart, and check then passes.
+    place_project(project, config)
+    positions = load_layout(config.layout).diagrams[OVERVIEW]
+    assert sorted(positions) == keys
+    assert positions[keys[0]] != positions[keys[1]]
+    assert check_project(project, config) == []
+    # The canvas shows two boxes, one per class.
+    overview = build_overview(project, config, shown_path="erdify-layout.json")
+    assert [box["key"] for box in overview["boxes"]] == keys
 
 
 def test_without_relationships_there_are_no_foreign_boxes(tmp_path: Path) -> None:
