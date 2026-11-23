@@ -17,8 +17,11 @@ from erdify_studio import (
     check_project,
     entity_keys,
     load_config,
+    load_layout,
+    place_project,
     save_layout,
 )
+from erdify_studio._overview import build_overview
 from erdify_studio.cli import main
 
 MODELS = """\
@@ -159,8 +162,17 @@ def test_same_name_classes_in_two_modules_are_separate_entities(tmp_path: Path) 
         "billing.models.Address": "billing.models.Address",
         "shipping.models.Address": "shipping.models.Address",
     }
-    keys = ("billing.models.Address", "shipping.models.Address")
-    assert _check(tmp_path, _complete({OVERVIEW: keys})) == []
+    config = load_config(project.settings.pyproject)
+    keys = ["billing.models.Address", "shipping.models.Address"]
+    # place --auto lays out both, apart, and check then passes.
+    place_project(project, config)
+    positions = load_layout(config.layout).diagrams[OVERVIEW]
+    assert sorted(positions) == keys
+    assert positions[keys[0]] != positions[keys[1]]
+    assert check_project(project, config) == []
+    # The canvas shows two boxes, one per class.
+    overview = build_overview(project, config, shown_path="erdify-layout.json")
+    assert [box["key"] for box in overview["boxes"]] == keys
 
 
 def test_without_relationships_there_are_no_foreign_boxes(tmp_path: Path) -> None:

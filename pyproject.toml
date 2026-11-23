@@ -24,8 +24,9 @@ classifiers = [
     "Topic :: Database",
     "Topic :: Software Development :: Documentation",
 ]
-# 1.8.0: the public API studio builds on (EntityInfo.schema/module/app,
-# diagram_edges, load_project, enum_users) and schema-aware tables and edges.
+# 1.9.0: the public API studio builds on (EntityInfo.schema/module/app,
+# diagram_edges, load_project, enum_users), schema-aware tables and edges, and
+# same-name classes in different modules as separate `module.Class` entities.
 dependencies = ["erdify>=1.9.0,<2"]
 
 [project.optional-dependencies]
