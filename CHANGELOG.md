@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Group diagrams in the canvas: a list switches between the overview and one diagram
+  per group. A group diagram shows its entities, the enums they use and greyed-out,
+  name-only foreign boxes for connected entities of other groups; clicking one opens
+  its group. Positions are kept per diagram, and one Save writes every diagram. Edges
+  between two foreign boxes are not drawn. The API serves every diagram at
+  `GET /api/diagrams` (replacing `/api/overview`), and `PUT /api/layout` takes
+  `{"revision", "diagrams"}`.
 - Entities that would share a layout key are keyed by erdify's entity name instead of
   being refused: same-name model classes in different modules, which erdify draws as
   `module.Class` (erdify#367), and several classes of one table. A

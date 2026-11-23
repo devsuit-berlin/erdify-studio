@@ -9,8 +9,8 @@
 Arrange your [erdify](https://github.com/devsuit-berlin/erdify) ERDs by drag and drop,
 commit the layout to your repo and check in CI that it stays up to date.
 
-> **Status: pre-alpha.** `check`, `place --auto` and the overview canvas work; group
-> diagrams and SVG export are still to come. Progress is tracked in the
+> **Status: pre-alpha.** `check`, `place --auto` and the canvas (overview and group
+> diagrams) work; SVG export is still to come. Progress is tracked in the
 > [v0.1.0 milestone](https://github.com/devsuit-berlin/erdify-studio/milestone/1).
 
 erdify generates ERDs from your code (SQLModel, SQLAlchemy, Django, Pydantic,
@@ -44,16 +44,22 @@ erdify-studio [path]                     # same as: erdify-studio open [path]
 erdify-studio --no-browser --port 8765   # print the URL instead of opening a browser
 ```
 
-Serves the overview diagram on `127.0.0.1` (a free port unless `--port` is given) and
-opens it in your browser; Ctrl+C stops it. Every entity shows its fields (PK / FK / UK
+Serves the diagrams on `127.0.0.1` (a free port unless `--port` is given) and opens
+them in your browser; Ctrl+C stops it. Every entity shows its fields (PK / FK / UK
 badges, type, `?` for nullable), enums erdify draws show their values, and the edges are
 erdify's own, with crow's-foot ends.
 
+- The list on the left switches between the overview and one diagram per group
+  (`[tool.erdify-studio] group_by`). A group diagram shows its own entities, the enums
+  they use, and a greyed-out, name-only **foreign box** for every entity of another
+  group they are connected to. Click a foreign box to open its group's diagram; drag
+  it to move it. A dot marks diagrams with unsaved changes; the URL keeps the open one.
+- Each diagram has its own positions: moving an entity in one diagram doesn't move it
+  in another.
 - Drag a box: its edges follow and "Unsaved changes" appears. Drag the background to
   pan, scroll or use the buttons to zoom.
-- **Save** (or Ctrl/⌘+S) writes the layout file: the overview as you arranged it, plus
-  what `place --auto` would do for the rest (group diagrams get missing boxes, stale
-  entries are dropped), so `check` passes afterwards.
+- **Save** (or Ctrl/⌘+S) writes every diagram to the layout file at once, so `check`
+  passes afterwards; entries for tables or groups that no longer exist are dropped.
 - Boxes without a position are placed like `place --auto` does and marked **NEW** until
   you save.
 - If the layout file changed, or tables were added or removed, after the page loaded
