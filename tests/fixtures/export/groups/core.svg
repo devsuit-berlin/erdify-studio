@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-40 -40 700 178" width="700" height="178">
+  <rect x="-40" y="-40" width="700" height="178" fill="#ffffff"/>
+  <g class="edge">
+    <title>referred_by_id</title>
+    <path d="M 240 35 C 296 16.33, 296 81.67, 240 63" fill="none" stroke="#62748e" stroke-width="1.25"/>
+    <path d="M 252 35 L 240 28 M 252 35 L 240 42" fill="none" stroke="#62748e" stroke-width="1.25"/>
+    <path d="M 264 35 a 4 4 0 1 0 -8 0 a 4 4 0 1 0 8 0" fill="#f8fafc" stroke="#62748e" stroke-width="1.25"/>
+    <path d="M 246 56 L 246 70" fill="none" stroke="#62748e" stroke-width="1.25"/>
+    <path d="M 264 63 a 4 4 0 1 0 -8 0 a 4 4 0 1 0 8 0" fill="#f8fafc" stroke="#62748e" stroke-width="1.25"/>
+  </g>
+  <g class="edge">
+    <title>customer_id</title>
+    <path d="M 420 54.25 L 240 51.1" fill="none" stroke="#62748e" stroke-width="1.25"/>
+    <path d="M 408 54.04 L 419.88 61.25 M 408 54.04 L 420.12 47.25" fill="none" stroke="#62748e" stroke-width="1.25"/>
+    <path d="M 404 53.9 a 4 4 0 1 0 -8 0 a 4 4 0 1 0 8 0" fill="#f8fafc" stroke="#62748e" stroke-width="1.25"/>
+    <path d="M 246.12 44.21 L 245.88 58.2" fill="none" stroke="#62748e" stroke-width="1.25"/>
+    <path d="M 264 51.45 a 4 4 0 1 0 -8 0 a 4 4 0 1 0 8 0" fill="#f8fafc" stroke="#62748e" stroke-width="1.25"/>
+  </g>
+  <g transform="translate(420 40)" data-key="billing.invoices" font-family='"JetBrains Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace' font-size="13.33">
+    <clipPath id="clip-0"><rect width="200" height="32" rx="6"/></clipPath>
+    <rect width="200" height="32" rx="6" fill="#f8fafc"/>
+    <g clip-path="url(#clip-0)">
+      <rect width="200" height="32" fill="#f8fafc"/>
+      <text x="16" y="20.67" font-weight="700" fill="#62748e">billing.invoices</text>
+    </g>
+    <rect width="200" height="32" rx="6" fill="none" stroke="#cad5e2" stroke-width="1" stroke-dasharray="4 3"/>
+  </g>
+  <g transform="translate(0 0)" data-key="core.customers" font-family='"JetBrains Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace' font-size="13.33">
+    <clipPath id="clip-1"><rect width="240" height="98" rx="6"/></clipPath>
+    <rect width="240" height="98" rx="6" fill="#ffffff"/>
+    <g clip-path="url(#clip-1)">
+      <rect width="240" height="32" fill="#e2e8f0"/>
+      <text x="16" y="20.67" font-weight="700" fill="#0f172b">core.customers</text>
+      <text x="16" y="47.67" font-weight="700" fill="#615fff">PK</text>
+      <text x="64" y="47.67" fill="#0f172b">id</text>
+      <text x="224" y="47.67" text-anchor="end" fill="#62748e">int</text>
+      <line x1="0" x2="240" y1="54" y2="54" stroke="#e2e8f0"/>
+      <text x="16" y="69.67" font-weight="700" fill="#615fff">UK</text>
+      <text x="64" y="69.67" fill="#0f172b">email</text>
+      <text x="224" y="69.67" text-anchor="end" fill="#62748e">str</text>
+      <line x1="0" x2="240" y1="76" y2="76" stroke="#e2e8f0"/>
+      <text x="16" y="91.67" font-weight="700" fill="#615fff">FK</text>
+      <text x="64" y="91.67" fill="#0f172b">referred_by_id</text>
+      <text x="224" y="91.67" text-anchor="end" fill="#62748e">int?</text>
+    </g>
+    <rect width="240" height="98" rx="6" fill="none" stroke="#cad5e2" stroke-width="1"/>
+  </g>
+</svg>
