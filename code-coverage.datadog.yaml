@@ -1,0 +1,28 @@
+# Datadog Code Coverage configuration.
+#
+# Reports are uploaded by the "Upload coverage to Datadog" step in
+# .github/workflows/test.yml (one matrix leg, Linux + Python 3.13). Coverage
+# paths in coverage.xml are repository-relative (src/erdify_studio/...), so no
+# base-path override is needed. The frontend has no coverage report yet.
+schema-version: v1
+
+services:
+  - id: erdify-studio
+    paths:
+      - "src/erdify_studio/**"
+
+ignore:
+  - "tests/**"
+  - "scripts/**"
+  - "docs/**"
+  - "frontend/**"
+
+gates:
+  # Mirrors `poe test --cov-fail-under=90` in .github/workflows/test.yml, which
+  # already fails the test job below that number. Keep the two in sync.
+  - type: total_coverage_percentage
+    config:
+      threshold: 90
+  - type: patch_coverage_percentage
+    config:
+      threshold: 90

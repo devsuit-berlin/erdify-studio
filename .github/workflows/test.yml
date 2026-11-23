@@ -46,4 +46,100 @@ jobs:
           EXPECTED: ${{ matrix.python-version }}
         shell: bash
         run: uv run python -c "import os, sys; assert '%d.%d' % sys.version_info[:2] == os.environ['EXPECTED'], sys.version"
-      - run: uv run --frozen poe test --cov-fail-under=90
+      - run: uv run --frozen poe test --cov-fail-under=90 --cov-report=xml
+      # Uploaded from one leg only: every leg measures the same line coverage, so more
+      # uploads would only fragment the report in Datadog (same as erdify).
+      #
+      # Skipped for fork PRs (no secrets on `pull_request`; never switch to
+      # `pull_request_target`, it would expose the key to untrusted code) and for
+      # Dependabot (its runs get Dependabot secrets, so the key would be empty).
+      # Secrets can't be used in `if:` (a startup_failure), and a job-level env var
+      # would hand the key to every step, so the condition matches on the actor.
+      - name: Upload coverage to Datadog
+        if: >-
+          !cancelled()
+          && matrix.os == 'ubuntu-latest'
+          && matrix.python-version == '3.13'
+          && github.actor != 'dependabot[bot]'
+          && (github.event_name != 'pull_request'
+          || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: DataDog/coverage-upload-github-action@d9548b1c3c4ab639d5d3ab29a1508af188975f77 # v1.0.5
+        with:
+          api_key: ${{ secrets.DATADOG_CODE_COVERAGE_KEY }}
+          site: datadoghq.eu
+          # The action is SHA-pinned, but its `version` input defaults to a floating
+          # datadog-ci major that runs with the API key — pin it too (bumped by hand;
+          # Dependabot only tracks the `uses` reference).
+          version: "v5.23.0"
+          flags: "type:unit-tests,language:python"
+          files: coverage.xml
+
+  # README coverage badge: a shields.io endpoint payload on the orphan `badges`
+  # branch (https://raw.githubusercontent.com/devsuit-berlin/erdify-studio/badges/coverage.json).
+  # Datadog has no public badge endpoint; the branch keeps the data in this repo with
+  # GITHUB_TOKEN as the only credential. A separate job because it needs
+  # `contents: write`, which the test matrix must not have; it re-measures coverage
+  # rather than passing an artifact (same as erdify).
+  badge:
+    name: Coverage badge
+    # Pushes to main only: a PR must not move what the default branch advertises.
+    if: github.event_name == 'push'
+    needs: [test]
+    runs-on: ubuntu-latest
+    # Push runs are grouped per commit above, so two merges can run in parallel;
+    # serialise the badge commits so the second push doesn't fail non-fast-forward.
+    concurrency:
+      group: coverage-badge
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # hatch-vcs derives the version from the latest tag
+      - name: Checkout the badges branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: badges
+          path: .badges
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "latest-known"
+          python-version: "3.13"
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - run: uv sync --frozen
+      - run: uv run --frozen poe test --cov-report=xml
+      - name: Write the badge payload
+        run: |
+          python - <<'EOF' > .badges/coverage.json
+          import json
+          import xml.etree.ElementTree as ET
+
+          percentage = float(ET.parse("coverage.xml").getroot().get("line-rate")) * 100
+          # Below the 90 % gate the test job fails anyway, so the scale centres on
+          # the range that still carries information.
+          thresholds = ((95, "brightgreen"), (90, "green"), (85, "yellowgreen"), (70, "yellow"))
+          color = next((c for t, c in thresholds if percentage >= t), "red")
+          badge = {
+              "schemaVersion": 1,
+              "label": "coverage",
+              "message": f"{percentage:.2f}%",
+              "color": color,
+          }
+          print(json.dumps(badge, indent=2))
+          EOF
+          cat .badges/coverage.json
+      - name: Commit the badge payload
+        working-directory: .badges
+        run: |
+          if git diff --quiet -- coverage.json; then
+            echo "Coverage unchanged; nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add coverage.json
+          git commit -m "chore(badge): coverage $(python -c "import json;print(json.load(open('coverage.json'))['message'])")"
+          git push
