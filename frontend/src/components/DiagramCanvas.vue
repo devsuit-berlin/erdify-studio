@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 
-import type { Overview, Position } from "../api";
+import type { BoxDef, DiagramJson, DrawnBox, Metrics, Position } from "../api";
 import { FIT_MARGIN, MAX_ZOOM, MIN_ZOOM } from "../drawing";
 import { fanOffsets, type Rect } from "../geometry";
 import BoxNode from "./BoxNode.vue";
 import EdgeLine from "./EdgeLine.vue";
 
 const props = defineProps<{
-  overview: Overview;
+  boxes: Record<string, BoxDef>;
+  diagram: DiagramJson;
+  metrics: Metrics;
   positions: Record<string, Position>;
   newKeys: ReadonlySet<string>;
+  projectPath: string;
 }>();
 
 const emit = defineEmits<{ move: [key: string, position: Position] }>();
@@ -18,24 +21,30 @@ const emit = defineEmits<{ move: [key: string, position: Position] }>();
 const svg = ref<SVGSVGElement | null>(null);
 const view = ref({ x: 0, y: 0, scale: 1 });
 
+// What this diagram draws; Python decided it (own and foreign keys, sizes, edges).
+const drawn = computed<DrawnBox[]>(() => [
+  ...props.diagram.own.map((key) => ({ key, ...props.boxes[key], foreign: false })),
+  ...props.diagram.foreign.map((key) => {
+    const [width, height] = props.diagram.foreignSizes[key];
+    return { key, kind: "entity" as const, title: props.boxes[key].title, width, height, rows: [], foreign: true };
+  }),
+]);
+
 const rects = computed(() => {
   const found: Record<string, Rect> = {};
-  for (const box of props.overview.boxes) {
-    const [x, y] = props.positions[box.key] ?? [box.x, box.y];
+  for (const box of drawn.value) {
+    const [x, y] = props.positions[box.key] ?? props.diagram.positions[box.key];
     found[box.key] = { x, y, width: box.width, height: box.height };
   }
   return found;
 });
 
 const edges = computed(() => {
-  const shown = props.overview.edges.filter((e) => rects.value[e.from] && rects.value[e.to]);
-  const offsets = fanOffsets(shown);
-  return shown.map((edge, i) => ({ edge, offset: offsets[i] }));
+  const offsets = fanOffsets(props.diagram.edges);
+  return props.diagram.edges.map((edge, i) => ({ edge, offset: offsets[i] }));
 });
 
-const enumLinks = computed(() =>
-  props.overview.enumLinks.filter((l) => rects.value[l.enum] && rects.value[l.entity]),
-);
+const enumLinks = computed(() => props.diagram.enumLinks);
 
 // --- view: fit, zoom, pan -----------------------------------------------------------
 
@@ -115,7 +124,7 @@ const dragging = ref<{ key: string; pointer: number; x: number; y: number; bx: n
 // The dragged box is drawn last, on top of the others.
 const ordered = computed(() => {
   const key = dragging.value?.key;
-  return key ? [...props.overview.boxes.filter((b) => b.key !== key), ...props.overview.boxes.filter((b) => b.key === key)] : props.overview.boxes;
+  return key ? [...drawn.value.filter((b) => b.key !== key), ...drawn.value.filter((b) => b.key === key)] : drawn.value;
 });
 
 // The pointer is captured by the <svg>, not the box: the dragged box is re-inserted
@@ -203,7 +212,7 @@ defineExpose({ fit });
           :box="box"
           :x="rects[box.key].x"
           :y="rects[box.key].y"
-          :metrics="overview.metrics"
+          :metrics="metrics"
           :is-new="newKeys.has(box.key)"
           :dragging="dragging?.key === box.key"
           @pointerdown="onBoxDown($event, box.key)"
@@ -211,10 +220,10 @@ defineExpose({ fit });
       </g>
     </svg>
     <p
-      v-if="!overview.boxes.length"
+      v-if="!drawn.length"
       class="pointer-events-none absolute inset-0 flex items-center justify-center text-muted"
     >
-      No entities found in {{ overview.projectPath }}.
+      No entities found in {{ projectPath }}.
     </p>
     <div class="absolute right-4 bottom-4 flex gap-1">
       <UButton icon="i-lucide-minus" color="neutral" variant="outline" aria-label="Zoom out" @click="zoom(1 / 1.25)" />

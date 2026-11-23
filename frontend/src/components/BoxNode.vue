@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, useId } from "vue";
 
-import type { Box, FieldRow, Metrics } from "../api";
+import type { DrawnBox, FieldRow, Metrics } from "../api";
 import { FONT_ADVANCE, FONT_FAMILY, MARKER_CHARS } from "../drawing";
 
 const props = defineProps<{
-  box: Box;
+  box: DrawnBox;
   x: number;
   y: number;
   metrics: Metrics;

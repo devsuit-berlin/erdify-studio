@@ -1,4 +1,4 @@
-// The studio's HTTP API (src/erdify_studio/_server.py); types mirror _overview.py.
+// The studio's HTTP API (src/erdify_studio/_server.py); types mirror _diagrams.py.
 
 export interface Metrics {
   charWidth: number;
@@ -20,15 +20,14 @@ export interface ValueRow {
   name: string;
 }
 
-export interface Box {
-  key: string;
+// An entity or enum box, sent once for every diagram that shows it.
+export interface BoxDef {
   kind: "entity" | "enum";
   title: string;
-  x: number;
-  y: number;
+  // The entity's group diagram; null for enums and without groups.
+  group: string | null;
   width: number;
   height: number;
-  new: boolean;
   rows: FieldRow[] | ValueRow[];
 }
 
@@ -53,22 +52,48 @@ export interface EnumLink {
 
 export interface Pending {
   placed: number;
-  groupChanges: number;
+  diagrams: number;
+  dropped: number;
   created: boolean;
 }
 
-export interface Overview {
-  metrics: Metrics;
-  boxes: Box[];
+export type Position = [number, number];
+
+export interface DiagramJson {
+  name: string;
+  label: string;
+  own: string[];
+  foreign: string[];
+  foreignSizes: Record<string, [number, number]>;
+  positions: Record<string, Position>;
+  new: string[];
   edges: Edge[];
   enumLinks: EnumLink[];
+}
+
+export interface Diagrams {
+  metrics: Metrics;
+  boxes: Record<string, BoxDef>;
+  diagrams: DiagramJson[];
   revision: string | null;
   pending: Pending;
   layoutPath: string;
   projectPath: string;
 }
 
-export type Position = [number, number];
+/** A box as one diagram draws it: a foreign box shows its title only. */
+export interface DrawnBox {
+  key: string;
+  kind: "entity" | "enum";
+  title: string;
+  width: number;
+  height: number;
+  rows: FieldRow[] | ValueRow[];
+  foreign: boolean;
+}
+
+/** Diagram name -> layout key -> position. */
+export type AllPositions = Record<string, Record<string, Position>>;
 
 export type SaveOutcome =
   | { ok: true; saved: string; revision: string }
@@ -86,24 +111,24 @@ async function errorMessage(response: Response): Promise<string> {
   }
 }
 
-export async function fetchOverview(): Promise<Overview> {
-  const response = await fetch("api/overview", { headers: { "X-Studio-Token": token } });
+export async function fetchDiagrams(): Promise<Diagrams> {
+  const response = await fetch("api/diagrams", { headers: { "X-Studio-Token": token } });
   if (!response.ok) {
     throw new Error(await errorMessage(response));
   }
-  return (await response.json()) as Overview;
+  return (await response.json()) as Diagrams;
 }
 
 export async function saveLayout(
   revision: string | null,
-  positions: Record<string, Position>,
+  diagrams: AllPositions,
 ): Promise<SaveOutcome> {
   let response: Response;
   try {
     response = await fetch("api/layout", {
       method: "PUT",
       headers: { "Content-Type": "application/json", "X-Studio-Token": token },
-      body: JSON.stringify({ revision, positions }),
+      body: JSON.stringify({ revision, diagrams }),
     });
   } catch {
     return { ok: false, conflict: false, message: "erdify-studio is not running any more" };
