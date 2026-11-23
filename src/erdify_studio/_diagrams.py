@@ -137,6 +137,13 @@ class Diagrams(TypedDict):
 _LABELS = {OVERVIEW: "Overview", DEFAULT_GROUP: "Ungrouped"}
 
 
+def _label(name: str) -> str:
+    """The diagram's name as the UI lists it; a group never looks like a built-in one."""
+    if name in _LABELS:
+        return _LABELS[name]
+    return f"{name} (group)" if name in _LABELS.values() else name
+
+
 def layout_revision(path: Path) -> str | None:
     """The sha256 hex digest of the file at ``path``; None when there is none.
 
@@ -191,7 +198,7 @@ def build_diagrams(project: Project, config: StudioConfig, *, shown_path: str) -
         diagrams.append(
             {
                 "name": name,
-                "label": _LABELS.get(name, name),
+                "label": _label(name),
                 "own": sorted(content.entities | content.enums),
                 "foreign": foreign,
                 "foreignSizes": {key: list(name_box_size(key)) for key in foreign},
@@ -275,7 +282,7 @@ def _checked(positions: object, shown: frozenset[str]) -> dict[str, tuple[float,
     """``positions`` narrowed to key -> ``(x, y)`` numbers, with exactly the ``shown`` keys."""
     if not isinstance(positions, Mapping):
         raise PositionsError(f"positions must be an object, got {type(positions).__name__!r}")
-    # Other boxes than the overview has: the page was loaded before the models
+    # Other boxes than the diagram shows: the page was loaded before the models
     # changed (e.g. a `git checkout`). Saving would drop the positions it lacks.
     missing = sorted(shown - positions.keys())
     unknown = sorted(positions.keys() - shown)

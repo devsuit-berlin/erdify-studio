@@ -23,8 +23,8 @@ const views: Record<string, View> = {};
 // What the file lacks before anything is dragged (from the server); cleared by a save.
 const pendingShown = ref(false);
 const moved = ref<Set<string>>(new Set());
-// Counts drags, so a save only clears "unsaved" when nothing moved while it ran.
-let edits = 0;
+// Drags per diagram, so a save only clears the diagrams nothing moved in while it ran.
+const edits: Record<string, number> = {};
 const saving = ref(false);
 
 const dirty = computed(() => pendingShown.value || moved.value.size > 0);
@@ -71,6 +71,17 @@ function select(name: string): void {
   history.replaceState(null, "", `#diagram=${encodeURIComponent(name)}`);
 }
 
+// The diagram the hash names, or the overview for a missing or unknown one.
+function hashTarget(): string {
+  const wanted = hashDiagram();
+  return loaded.value?.diagrams.some((d) => d.name === wanted) ? wanted! : OVERVIEW;
+}
+
+// Editing the hash in the address bar (or a link to it) switches diagrams.
+function onHashChange(): void {
+  if (loaded.value) select(hashTarget());
+}
+
 // Set when a diagram is opened from a foreign box: that entity is centred there.
 const focusKey = ref<string | undefined>(undefined);
 
@@ -89,18 +100,18 @@ function onMove(key: string, position: Position): void {
   const name = current.value;
   positions.value = { ...positions.value, [name]: { ...positions.value[name], [key]: position } };
   moved.value = new Set([...moved.value, name]);
-  edits += 1;
+  edits[name] = (edits[name] ?? 0) + 1;
 }
 
 async function save(): Promise<void> {
   if (!loaded.value || saving.value || !dirty.value) return;
   saving.value = true;
-  const editsAtSave = edits;
+  const editsAtSave = { ...edits };
   try {
     const outcome = await saveLayout(revision.value, positions.value);
     if (outcome.ok) {
       revision.value = outcome.revision;
-      if (edits === editsAtSave) moved.value = new Set();
+      moved.value = new Set([...moved.value].filter((name) => edits[name] !== editsAtSave[name]));
       pendingShown.value = false;
       newKeys.value = {};
       toast.remove(SAVE_ERROR);
@@ -142,6 +153,7 @@ function onBeforeUnload(event: BeforeUnloadEvent): void {
 onMounted(async () => {
   window.addEventListener("keydown", onKey);
   window.addEventListener("beforeunload", onBeforeUnload);
+  window.addEventListener("hashchange", onHashChange);
   try {
     const data = await fetchDiagrams();
     positions.value = Object.fromEntries(data.diagrams.map((d) => [d.name, { ...d.positions }]));
@@ -149,9 +161,9 @@ onMounted(async () => {
     revision.value = data.revision;
     const { placed, dropped, created } = data.pending;
     pendingShown.value = created || placed > 0 || dropped > 0;
-    const wanted = hashDiagram();
-    current.value = data.diagrams.some((d) => d.name === wanted) ? wanted! : OVERVIEW;
     loaded.value = data;
+    // An unknown name in the hash is replaced, so the URL names what is shown.
+    if (window.location.hash) select(hashTarget());
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : String(error);
   }
@@ -160,6 +172,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKey);
   window.removeEventListener("beforeunload", onBeforeUnload);
+  window.removeEventListener("hashchange", onHashChange);
 });
 </script>
 
@@ -172,6 +185,7 @@ onBeforeUnmount(() => {
         <DiagramList
           v-if="loaded && loaded.diagrams.length > 1"
           :diagrams="loaded.diagrams"
+          :boxes="loaded.boxes"
           :current="current"
           :unsaved="unsaved"
           @select="select"
