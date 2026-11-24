@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="erdify studio">
+<rect width="1024" height="1024" rx="224" fill="#4150AA"/>
+<path d="M504 312H636V512" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M542 280V344" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M636 456L590 512M636 456L682 512" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="144" y="176" width="360" height="272" rx="36" fill="#FFFFFF"/>
+<path d="M144 212a36 36 0 0 1 36-36h288a36 36 0 0 1 36 36v52H144z" fill="#192346"/>
+<circle cx="198" cy="316" r="14" fill="#F5DC19"/>
+<rect x="230" y="304" width="200" height="24" rx="12" fill="#C5CAE9"/>
+<rect x="184" y="372" width="264" height="24" rx="12" fill="#C5CAE9"/><rect x="536" y="592" width="360" height="272" rx="36" stroke="#18B4E0" stroke-width="16" stroke-dasharray="40 28" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="456" y="512" width="360" height="272" rx="36" fill="#FFFFFF"/>
+<path d="M456 548a36 36 0 0 1 36-36h288a36 36 0 0 1 36 36v52H456z" fill="#192346"/>
+<circle cx="510" cy="652" r="14" fill="#F5DC19"/>
+<rect x="542" y="640" width="160" height="24" rx="12" fill="#C5CAE9"/>
+<rect x="496" y="708" width="180" height="24" rx="12" fill="#C5CAE9"/><path transform="translate(724 552) scale(0.74)" d="M0 0V176L44 134L76 202L110 187L78 121H136Z" fill="#FFFFFF" stroke="#192346" stroke-width="14" stroke-linejoin="round"/>
+</svg>

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- erdify-studio logo (icon, light/dark wordmarks, favicon) on the docs site, in the README
+  and as the studio UI's favicon, plus brand guidelines (`docs/brand.md`).
+
 ## [0.1.0] - 2026-11-23
 
 ### Added

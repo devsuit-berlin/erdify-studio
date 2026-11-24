@@ -14,6 +14,8 @@ exclude_docs: |
 
 theme:
   name: material
+  logo: assets/erdify-studio-icon.svg
+  favicon: assets/favicon.png
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -59,6 +61,7 @@ nav:
       - Export SVGs: usage/export.md
   - Configuration: configuration.md
   - The layout file: layout-file.md
+  - Brand: brand.md
   - Changelog: changelog.md
 
 markdown_extensions:
