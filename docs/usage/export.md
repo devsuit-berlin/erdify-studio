@@ -12,11 +12,15 @@ commit and embed in READMEs and docs:
   without Latin letters gets a stable `group-<hash>.svg`;
   entities without a group → `groups/ungrouped.svg`). Two groups that would share a
   file are an error (exit 2) naming both.
-- Studio's light theme on a white background, so the diagrams read well on light and
+- Studio's light theme on a white background by default (or the configured
+  [colours](../configuration.md#diagram-colours)), so the diagrams read well on light and
   dark pages; the font is JetBrains Mono where installed, else the system's monospace.
 - Byte-identical on every machine, so CI can compare the committed files.
 - `groups/*.svg` of groups that no longer exist are deleted; nothing else in
   `export_dir` is touched. Unchanged files are not rewritten.
+- Uses the colours of [`[tool.erdify-studio.colors]`](../configuration.md#diagram-colours);
+  changing them makes committed SVGs outdated, and `check` reports them until the next
+  `export` or Save.
 - Exits 1 while the layout file is out of date (run `place --auto` or Save in studio
   first), 2 without `export_dir`.
 

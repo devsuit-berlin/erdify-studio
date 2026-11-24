@@ -391,6 +391,7 @@ onBeforeUnmount(() => {
             :boxes="loaded.boxes"
             :diagram="diagram"
             :metrics="loaded.metrics"
+            :colors="loaded.colors"
             :positions="positions[current]"
             :new-keys="newKeys[current] ?? EMPTY"
             :project-path="loaded.projectPath"

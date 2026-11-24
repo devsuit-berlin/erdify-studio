@@ -4,6 +4,7 @@
 of the canvas); these tests pin that shape.
 """
 
+import dataclasses
 import hashlib
 import shutil
 from pathlib import Path
@@ -15,6 +16,7 @@ import pytest
 from erdify_studio import (
     DEFAULT_GROUP,
     OVERVIEW,
+    DiagramColors,
     Layout,
     check_project,
     dumps_layout,
@@ -781,3 +783,20 @@ def test_the_fingerprint_doesnt_read_the_layout_file(tmp_path: Path) -> None:
     before = _fingerprint(root)
     (root / "erdify-layout.json").write_text("<<<<<<< HEAD\n")
     assert _fingerprint(root) == before
+
+
+def test_payload_carries_the_colors(tmp_path: Path) -> None:
+    assert _payload(_project(tmp_path))["colors"] == {
+        "accent": "#615fff",
+        "header": "#e2e8f0",
+        "headerText": "#0f172b",
+        "background": "#ffffff",
+        "enumHeader": "#d8deff",
+        "enumTitle": "#0f172b",
+    }
+
+
+def test_fingerprint_changes_with_the_colors(tmp_path: Path) -> None:
+    project, config = _load(_project(tmp_path))
+    recolored = dataclasses.replace(config, colors=DiagramColors(accent="#4150aa"))
+    assert model_fingerprint(project, config) != model_fingerprint(project, recolored)

@@ -15,6 +15,7 @@ import erdify
 import pytest
 
 from erdify_studio import OVERVIEW, Layout, load_config, place_project, save_layout
+from erdify_studio._colors import resolve_palette
 from erdify_studio._diagrams import DiagramJson, Diagrams, build_diagrams
 from erdify_studio._svg import format_number, render_svg
 
@@ -234,3 +235,49 @@ def test_clip_ids_differ_between_non_latin_groups(tmp_path: Path) -> None:
 def test_format_number_is_stable_next_to_a_tie() -> None:
     """Platform maths libraries may differ by an ulp; both sides of a tie print alike."""
     assert format_number(1.125 + 1e-12) == format_number(1.125 - 1e-12) == "1.13"
+
+
+def test_render_svg_uses_the_palette(tmp_path: Path) -> None:
+    payload = _payload(_project(tmp_path))
+    diagram = next(d for d in payload["diagrams"] if d["name"] == "core")
+    palette = resolve_palette(accent="#4150aa", header="#192346", background="#fdf6e3")
+    svg = render_svg(diagram, payload["boxes"], payload["metrics"], palette)
+    ns = "{http://www.w3.org/2000/svg}"
+    root = ET.fromstring(svg)
+    assert root[0].get("fill") == "#fdf6e3"
+    box = next(g for g in root.iter() if g.get("data-key") == "core.customers")
+    rects = [r.get("fill") for r in box.iter(f"{ns}rect")]
+    assert "#192346" in rects
+    texts = {t.text: t.get("fill") for t in box.iter(f"{ns}text")}
+    assert texts["core.customers"] == "#ffffff"
+    assert texts["email"] == "#0f172b"
+    assert texts["PK"] == "#4150aa"
+    foreign = next(g for g in root.iter() if g.get("data-key") == "billing.invoices")
+    assert next(r for r in foreign.iter(f"{ns}rect") if r.get("fill")).get("fill") == "#f8fafc"
+    assert "<style" not in svg
+
+
+def test_the_enum_box_follows_the_header_colour_only_for_entities(tmp_path: Path) -> None:
+    payload = _payload(_project(tmp_path))
+    diagram = next(d for d in payload["diagrams"] if d["name"] == OVERVIEW)
+    svg = render_svg(
+        diagram, payload["boxes"], payload["metrics"], resolve_palette(header="#192346")
+    )
+    ns = "{http://www.w3.org/2000/svg}"
+    root = ET.fromstring(svg)
+
+    def parts(key: str) -> tuple[str | None, dict[str | None, str | None]]:
+        box = next(g for g in root.iter() if g.get("data-key") == key)
+        head = next(
+            r
+            for r in box.iter(f"{ns}rect")
+            if r.get("height") and r.get("fill") != "none" and r.get("rx") is None
+        )
+        return head.get("fill"), {t.text: t.get("fill") for t in box.iter(f"{ns}text")}
+
+    head, texts = parts("core.customers")
+    assert (head, texts["core.customers"], texts["email"]) == ("#192346", "#ffffff", "#0f172b")
+    head, texts = parts("enum:Status")
+    assert head == "#d8deff"
+    assert texts[next(t for t in texts if t and t.endswith("Status"))] == "#0f172b"
+    assert texts["OPEN"] == "#0f172b"

@@ -17,6 +17,7 @@ from typing import Literal, TypedDict
 from erdify import EdgeEnd, Project, diagram_edges
 
 from erdify_studio._check import DiagramContent, drawn_enums, project_diagrams
+from erdify_studio._colors import palette_of
 from erdify_studio._config import StudioConfig
 from erdify_studio._entities import entity_groups, entity_ids, entity_keys, enum_key
 from erdify_studio._errors import LayoutConflictError, LayoutError, PositionsError
@@ -125,12 +126,24 @@ class DiagramJson(TypedDict):
     enumLinks: list[EnumLink]
 
 
+class ColorsJson(TypedDict):
+    """The colours the canvas draws with (the ones of the SVG export's palette)."""
+
+    accent: str
+    header: str
+    headerText: str
+    background: str
+    enumHeader: str
+    enumTitle: str
+
+
 class Diagrams(TypedDict):
     """The JSON of ``GET /api/diagrams``."""
 
     metrics: dict[str, int]
     boxes: dict[str, BoxDef]
     diagrams: list[DiagramJson]
+    colors: ColorsJson
     revision: str | None
     pending: Pending
     layoutPath: str
@@ -202,6 +215,7 @@ def model_fingerprint(project: Project, config: StudioConfig) -> str:
             {k: v for k, v in d.items() if k not in ("positions", "new")}
             for d in payload["diagrams"]
         ],
+        "colors": payload["colors"],
         "exportDir": None if config.export_dir is None else str(config.export_dir),
     }
     text = json.dumps(shape, sort_keys=True, separators=(",", ":"))
@@ -250,10 +264,19 @@ def build_from(project: Project, config: StudioConfig, start: Layout, *, created
             }
         )
 
+    palette = palette_of(config.colors)
     return {
         "metrics": dict(METRICS),
         "boxes": _boxes(project, config, sizes, contents[OVERVIEW]),
         "diagrams": diagrams,
+        "colors": {
+            "accent": palette.accent,
+            "header": palette.header,
+            "headerText": palette.header_text,
+            "background": palette.background,
+            "enumHeader": palette.enum_header,
+            "enumTitle": palette.enum_title,
+        },
         "revision": None,
         "pending": _pending(result),
         "layoutPath": "",

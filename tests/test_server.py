@@ -2,6 +2,7 @@
 
 import http.client
 import json
+import logging
 import socket
 import threading
 import time
@@ -124,6 +125,71 @@ def studio(tmp_path: Path) -> Iterator[Studio]:
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+def _config_warnings(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [
+        r.getMessage()
+        for r in caplog.records
+        if r.name == "erdify_studio._config" and r.levelno == logging.WARNING
+    ]
+
+
+def test_config_warnings_are_logged_once_while_serving(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    root = _project(tmp_path / "project")
+    pyproject = root / "pyproject.toml"
+    base = pyproject.read_text()
+    pyproject.write_text(base + '[tool.erdify-studio.colors]\nbackground = "#1e2129"\n')
+    caplog.set_level(logging.WARNING, logger="erdify_studio._config")
+    server = start_server(
+        _loader(root), static_dir=_static(tmp_path), display=_relative(root), min_interval=3600
+    )
+    try:
+        server.refresh()
+        server.refresh()
+        assert len(_config_warnings(caplog)) == 1
+        pyproject.write_text(base + '[tool.erdify-studio.colors]\nbackground = "#111111"\n')
+        server.refresh()
+        server.refresh()
+        assert len(_config_warnings(caplog)) == 2
+        # Fixed, then broken again in the same session: warned again.
+        pyproject.write_text(base + '[tool.erdify-studio.colors]\nbackground = "#fdf6e3"\n')
+        server.refresh()
+        pyproject.write_text(base + '[tool.erdify-studio.colors]\nbackground = "#1e2129"\n')
+        server.refresh()
+        assert len(_config_warnings(caplog)) == 3
+    finally:
+        server.server_close()
+    # Closed: the filter is gone, a plain load warns again.
+    _loader(root)()
+    assert len(_config_warnings(caplog)) == 4
+
+
+def test_a_failed_load_does_not_repeat_config_warnings(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    root = _project(tmp_path / "project")
+    pyproject = root / "pyproject.toml"
+    pyproject.write_text(
+        pyproject.read_text() + '[tool.erdify-studio.colors]\nbackground = "#1e2129"\n'
+    )
+    caplog.set_level(logging.WARNING, logger="erdify_studio._config")
+    server = start_server(
+        _loader(root), static_dir=_static(tmp_path), display=_relative(root), min_interval=3600
+    )
+    try:
+        models = root / "shop" / "models.py"
+        good = models.read_text()
+        models.write_text(good + "\nclass Broken(\n")  # a half-typed model file
+        server.refresh()
+        assert server.snapshot().error is not None
+        models.write_text(good)
+        server.refresh()
+        assert len(_config_warnings(caplog)) == 1
+    finally:
+        server.server_close()
 
 
 def _json(body: bytes) -> Any:
@@ -673,6 +739,18 @@ def test_status(studio: Studio) -> None:
 
 def test_status_requires_the_token(studio: Studio) -> None:
     assert studio.request("GET", "/api/status", token=False)[0] == 403
+
+
+def test_status_reports_a_color_change(studio: Studio) -> None:
+    before = _status(studio)["model"]
+    (studio.root / "pyproject.toml").write_text(
+        '[tool.erdify]\ninclude = ["**/models.py"]\n'
+        '[tool.erdify-studio.colors]\naccent = "#4150aa"\n'
+    )
+    studio.server.refresh()
+    assert _status(studio)["model"] != before
+    _, _, body = studio.request("GET", "/api/diagrams")
+    assert _json(body)["colors"]["accent"] == "#4150aa"
 
 
 def test_a_refresh_changes_the_model_fingerprint(studio: Studio) -> None:

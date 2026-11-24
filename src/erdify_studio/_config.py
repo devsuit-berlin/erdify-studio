@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, cast, get_args
 
+from erdify_studio._colors import DEFAULT_PALETTE, HEX, DiagramColors, contrast
 from erdify_studio._errors import ConfigError
 
 logger = logging.getLogger(__name__)
@@ -19,7 +20,10 @@ GroupBy = Literal["auto", "schema", "app", "module", "none"]
 DEFAULT_LAYOUT_NAME = "erdify-layout.json"
 
 _TABLE = "erdify-studio"
-_KEYS = ("layout", "group_by", "export_dir")
+_KEYS = ("layout", "group_by", "export_dir", "colors")
+_COLOR_KEYS = ("accent", "header", "header_text", "background")
+#: WCAG AA contrast for body text; a background below it makes field text hard to read.
+_MIN_TEXT_CONTRAST = 4.5
 
 
 @dataclass(frozen=True)
@@ -32,11 +36,13 @@ class StudioConfig:
             working directory.
         group_by: How entities are grouped into diagrams (``GroupBy``).
         export_dir: Directory for the exported SVGs; None when nothing is exported.
+        colors: The diagram colours set in ``[tool.erdify-studio.colors]``.
     """
 
     layout: Path
     group_by: GroupBy
     export_dir: Path | None
+    colors: DiagramColors = DiagramColors()
 
 
 def load_config(pyproject: Path | None) -> StudioConfig:
@@ -67,7 +73,12 @@ def load_config(pyproject: Path | None) -> StudioConfig:
         )
     layout = _path(table, "layout", base, source) or base / DEFAULT_LAYOUT_NAME
     export_dir = _path(table, "export_dir", base, source)
-    return StudioConfig(layout=layout, group_by=cast(GroupBy, group_by), export_dir=export_dir)
+    return StudioConfig(
+        layout=layout,
+        group_by=cast(GroupBy, group_by),
+        export_dir=export_dir,
+        colors=_colors_table(table, source),
+    )
 
 
 def _read_table(pyproject: Path) -> dict[str, object]:
@@ -93,3 +104,31 @@ def _path(table: dict[str, object], key: str, base: Path, source: str) -> Path |
             f"[tool.{_TABLE}] {key!r} must be a non-empty string, got {value!r} in {source}"
         )
     return base / value
+
+
+def _colors_table(table: dict[str, object], source: str) -> DiagramColors:
+    raw = table.get("colors", {})
+    if not isinstance(raw, dict):
+        raise ConfigError(f"[tool.{_TABLE}] 'colors' must be a table in {source}")
+    for key in sorted(set(raw) - set(_COLOR_KEYS)):
+        logger.warning(f"unknown [tool.{_TABLE}.colors] key {key!r} in {source}, ignored")
+    values: dict[str, str] = {}
+    for key in _COLOR_KEYS:
+        if key not in raw:
+            continue
+        value = raw[key]
+        if not isinstance(value, str) or not HEX.fullmatch(value):
+            raise ConfigError(
+                f'[tool.{_TABLE}.colors] {key!r} must be a "#rrggbb" colour, '
+                f"got {value!r} in {source}"
+            )
+        values[key] = value.lower()
+    background = values.get("background")
+    if background is not None:
+        ratio = contrast(background, DEFAULT_PALETTE.text)
+        if ratio < _MIN_TEXT_CONTRAST:
+            logger.warning(
+                f"[tool.{_TABLE}.colors] background {background!r} is too dark for the field "
+                f"text (contrast {ratio:.1f}:1, below {_MIN_TEXT_CONTRAST}:1) in {source}"
+            )
+    return DiagramColors(**values)

@@ -1,5 +1,6 @@
 """``erdify-studio [path]``: open the canvas (the default command)."""
 
+import logging
 import socket
 from collections.abc import Iterator
 from pathlib import Path
@@ -73,6 +74,19 @@ def test_no_browser_prints_the_url_only(
     assert main(["--no-browser", str(_project(tmp_path / "p"))]) == 0
     assert opened == []
     assert "?token=" in capsys.readouterr().out
+
+
+def test_a_config_warning_is_logged_once_at_startup(
+    tmp_path: Path, opened: list[str], caplog: pytest.LogCaptureFixture
+) -> None:
+    root = _project(tmp_path / "p")
+    pyproject = root / "pyproject.toml"
+    pyproject.write_text(
+        pyproject.read_text() + '[tool.erdify-studio.colors]\nbackground = "#1e2129"\n'
+    )
+    with caplog.at_level(logging.WARNING, logger="erdify_studio._config"):
+        assert main(["--no-browser", str(root)]) == 0
+    assert len([r for r in caplog.records if "too dark" in r.getMessage()]) == 1
 
 
 def test_the_open_command_by_name(tmp_path: Path, opened: list[str]) -> None:
