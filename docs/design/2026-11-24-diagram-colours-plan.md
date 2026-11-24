@@ -39,8 +39,10 @@
 - Test: `tests/test_colors.py`
 
 **Interfaces:**
-- Consumes: nothing (`DiagramColors` comes in Task 2; this task takes plain optional strings).
+- Consumes: nothing.
 - Produces:
+  - `@dataclass(frozen=True) class DiagramColors` with `accent, header, header_text, background: str | None = None` (lowercase hex or None). It lives here, not in `_config.py`, so `_colors` never imports `_config` (which imports `_colors`).
+  - `palette_of(colors: DiagramColors) -> Palette` (thin wrapper over `resolve_palette`).
   - `@dataclass(frozen=True) class Palette` with `str` fields `background, background_muted, border, border_accented, text, text_muted, accent, header, header_text, enum_header, enum_title`.
   - `DEFAULT_PALETTE: Palette` (the Global Constraints defaults).
   - `resolve_palette(*, accent: str | None = None, header: str | None = None, header_text: str | None = None, background: str | None = None) -> Palette` (inputs already normalised lowercase).
@@ -57,6 +59,7 @@
   - `test_header_text_follows_a_set_header`: `resolve_palette(header="#192346").header_text == "#ffffff"`; `resolve_palette(header="#192346", header_text="#f5dc19").header_text == "#f5dc19"`.
   - `test_enum_title_follows_the_enum_header`: `resolve_palette(header="#192346").enum_title == "#0f172b"`; `resolve_palette(accent="#000000", background="#000000").enum_title == "#ffffff"`.
   - `test_enum_header_mixes_into_the_background`: `resolve_palette(background="#fdf6e3").enum_header == mix_oklab("#615fff", "#fdf6e3", 0.22)`.
+  - `test_palette_of`: `palette_of(DiagramColors(header="#192346")) == resolve_palette(header="#192346")`.
 
 - [ ] **Step 2: Run them, expect failure**
 
@@ -65,7 +68,7 @@ Expected: FAIL (`ModuleNotFoundError: erdify_studio._colors`).
 
 - [ ] **Step 3: Implement `_colors.py`**
 
-OKLab per Björn Ottosson's reference: sRGB → linear (`c/12.92` if `c <= 0.04045`, else `((c+0.055)/1.055)**2.4`) → LMS (his M1) → cube root → Lab (M2); interpolate L, a, b linearly; back via the inverse matrices; clamp each channel to [0, 1]; `round(c * 255)`; lowercase `#rrggbb`. WCAG luminance uses the same linearisation with `0.2126 R + 0.7152 G + 0.0722 B`; ratio `(L1 + 0.05) / (L2 + 0.05)` with L1 the lighter. If the default mix rounds to a neighbour of `#d8deff`, keep `DEFAULT_PALETTE.enum_header = "#d8deff"` and have `resolve_palette` return it when `accent` and `background` are both unset (comment why: no output change, design goal 4).
+OKLab per Björn Ottosson's reference: sRGB → linear (`c/12.92` if `c <= 0.04045`, else `((c+0.055)/1.055)**2.4`) → LMS (his M1) → cube root → Lab (M2); interpolate L, a, b linearly; back via the inverse matrices; clamp each channel to [0, 1]; `round(c * 255)`; lowercase `#rrggbb`. WCAG luminance uses the same linearisation with `0.2126 R + 0.7152 G + 0.0722 B`; ratio `(L1 + 0.05) / (L2 + 0.05)` with L1 the lighter. With these matrices the default mix gives exactly `#d8deff` and black/white at 0.5 gives `#636363` (checked while planning), so no value needs pinning.
 
 - [ ] **Step 4: Run them, expect pass**
 
@@ -82,8 +85,8 @@ Expected: PASS.
 - Test: `tests/test_config.py`
 
 **Interfaces:**
-- Consumes: `HEX`, `contrast` from Task 1.
-- Produces: `@dataclass(frozen=True) class DiagramColors` with `accent, header, header_text, background: str | None = None` (lowercase hex or None); `StudioConfig.colors: DiagramColors = DiagramColors()` (field with default, last, so existing constructors keep working); `"colors"` added to `_KEYS`; `DiagramColors` in `__all__`.
+- Consumes: `DiagramColors`, `HEX`, `contrast` from Task 1.
+- Produces: `StudioConfig.colors: DiagramColors = DiagramColors()` (field with default, last, so existing constructors keep working); `"colors"` added to `_KEYS`; `DiagramColors` in `__all__`.
 
 - [ ] **Step 1: Write the failing tests** (reuse `_pyproject(tmp_path, table)`):
   - `test_colors_default_to_none`: no table → `load_config(...).colors == DiagramColors()`.
@@ -116,8 +119,8 @@ Expected: PASS.
 - Test: `tests/test_svg.py`, `tests/test_export.py`
 
 **Interfaces:**
-- Consumes: `Palette`, `DEFAULT_PALETTE`, `resolve_palette` (Task 1); `StudioConfig.colors` (Task 2).
-- Produces: `render_svg(diagram, boxes, metrics, palette: Palette = DEFAULT_PALETTE) -> str`; `palette_of(colors: DiagramColors) -> Palette` in `_colors.py` (thin wrapper over `resolve_palette`, used by `_export.py` and Task 4).
+- Consumes: `Palette`, `DEFAULT_PALETTE`, `resolve_palette`, `palette_of` (Task 1); `StudioConfig.colors` (Task 2).
+- Produces: `render_svg(diagram, boxes, metrics, palette: Palette = DEFAULT_PALETTE) -> str`.
 
 Role mapping (only the three role changes; every other use keeps its constant's palette field): entity header → `palette.header`; entity title → `palette.header_text`; enum title → `palette.enum_title`; field names stay `palette.text`; foreign title stays `palette.text_muted`.
 
@@ -131,7 +134,7 @@ Role mapping (only the three role changes; every other use keeps its constant's 
 Run: `uv run --no-sync poe test tests/test_svg.py tests/test_export.py`
 Expected: FAIL (`render_svg() takes 3 positional arguments`).
 
-- [ ] **Step 3: Implement** the `palette` parameter and `palette_of`; `_export.py` passes `palette_of(config.colors)` in `export_files` and `render_download`.
+- [ ] **Step 3: Implement** the `palette` parameter; `_export.py` passes `palette_of(config.colors)` in `export_files` and `render_download`.
 
 - [ ] **Step 4: Run the whole suite; golden files must be untouched**
 
@@ -147,12 +150,12 @@ Expected: PASS, no changes under `tests/fixtures`.
 - Test: `tests/test_diagrams.py`, `tests/test_server.py`
 
 **Interfaces:**
-- Consumes: `palette_of` (Task 3).
+- Consumes: `palette_of` (Task 1), `StudioConfig.colors` (Task 2).
 - Produces: `class ColorsJson(TypedDict)` with `accent, header, headerText, background, enumHeader, enumTitle: str`; `Diagrams.colors: ColorsJson`; `model_fingerprint` includes `payload["colors"]`.
 
 - [ ] **Step 1: Write the failing tests**
   - `test_diagrams.py::test_payload_carries_the_colors`: default config → `payload["colors"] == {"accent": "#615fff", "header": "#e2e8f0", "headerText": "#0f172b", "background": "#ffffff", "enumHeader": "#d8deff", "enumTitle": "#0f172b"}`.
-  - `test_diagrams.py::test_fingerprint_changes_with_the_colors`: same project, `DiagramColors()` vs `DiagramColors(accent="#4150aa")` → different `model_fingerprint`.
+  - `test_diagrams.py::test_fingerprint_changes_with_the_colors`: same project, `config` vs `dataclasses.replace(config, colors=DiagramColors(accent="#4150aa"))` → different `model_fingerprint`.
   - `test_server.py::test_status_reports_a_color_change`: write `[tool.erdify-studio.colors] accent = "#4150aa"` into the project's pyproject, `studio.server.refresh()`, `/api/status` `model` differs from before; `/api/diagrams` `colors.accent == "#4150aa"`.
 
 - [ ] **Step 2: Run them, expect failure**
