@@ -18,7 +18,10 @@ erdify's own, with crow's-foot ends.
 - Each diagram has its own positions: moving an entity in one diagram doesn't move it
   in another.
 - Drag a box: its edges follow and "Unsaved changes" appears. Drag the background to
-  pan, scroll or use the buttons to zoom.
+  pan; scroll or use the zoom buttons (bottom right; the third fits the diagram to the
+  window).
+- The toolbar has **Colours** (below), **Download SVG** (the open diagram as SVG, with
+  the positions on screen; see [Export SVGs](export.md)) and **Save**.
 - **Save** (or Ctrl/⌘+S) writes every diagram to the layout file at once, so `check`
   passes afterwards; entries for tables or groups that no longer exist are dropped.
 - Boxes without a position are placed like `place --auto` does and marked **NEW** until

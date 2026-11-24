@@ -13,8 +13,9 @@ uvx --from "erdify-studio[sql]" erdify-studio check # with SQL DDL support
 ```
 
 erdify-studio needs Python 3.11 or newer and depends on
-[erdify](https://erdify.devsuit.io/installation/) (installed with it). The browser canvas is
-built into the wheel, so no Node is needed.
+[erdify](https://erdify.devsuit.io/installation/) 1.9 or newer (below 2), installed with
+it. The browser canvas is built into the wheel, so no Node is needed.
+`erdify-studio --version` prints both versions.
 
 Source checkout (contributors): see
 [CONTRIBUTING.md](https://github.com/devsuit-berlin/erdify-studio/blob/main/CONTRIBUTING.md).

@@ -19,18 +19,24 @@ In a project erdify already reads (`[tool.erdify]` in `pyproject.toml`):
     erdify-studio place --auto     # place new tables without opening the browser
     ```
 
-Optional: set `export_dir` (see [Configuration](configuration.md)) to commit the diagrams
-as SVG; Save and `erdify-studio export` keep them current, and `check` fails when they
-aren't.
+Optional:
+
+- Set `export_dir` (see [Configuration](configuration.md)) to commit the diagrams as SVG;
+  Save and `erdify-studio export` keep them current, and `check` fails when they aren't.
+  **Download SVG** in the toolbar grabs the open diagram without committing anything.
+- Give the diagrams your brand's colours: try them in the **Colours** panel of the
+  canvas, then put the copied table into `pyproject.toml`, replacing its colours table
+  if it has one ([Diagram colours](configuration.md#diagram-colours)).
 
 ## Commands
 
 ```bash
 erdify-studio [path]               # open the canvas in your browser, drag, save
+                                   # (--port, --no-browser: see "The canvas")
 erdify-studio check [path]         # exit 1 if the committed layout is out of date
 erdify-studio place --auto [path]  # place new tables, drop stale entries
 erdify-studio export [path]        # write one SVG per diagram to export_dir
 ```
 
 Options and sources come from erdify's config (`[tool.erdify]` in `pyproject.toml`)
-plus a `[tool.erdify-studio]` section.
+plus a [`[tool.erdify-studio]`](configuration.md) section.

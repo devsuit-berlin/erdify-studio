@@ -29,4 +29,5 @@ they are out of date, so one Save brings them up to date.
 
 Without committing anything: **Download SVG** in studio's toolbar downloads the open
 diagram as SVG, drawn the same way, with the positions on screen (saved or not). It
-needs no `export_dir`.
+needs no `export_dir`. It uses the colours in `pyproject.toml`, not a preview in the
+Colours panel.
