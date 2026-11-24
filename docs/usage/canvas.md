@@ -35,7 +35,8 @@ erdify's own, with crow's-foot ends.
 Like `check`, it exits 2 without starting when the canvas is not built (a source
 checkout without `uv run poe frontend`), when the project, its config or the layout
 file cannot be read, or erdify finds no entities. The page talks to the local server
-only: no CDN, fonts and icons ship in the wheel, and the API needs the random token in
-the URL it opens, so other web pages cannot change your layout.
+only: no CDN, fonts and icons ship in the wheel, and a Content-Security-Policy keeps it
+to its own files. The API needs the random token in the URL it opens, so other web pages
+cannot change your layout.
 
 ![A group diagram with a foreign box](../assets/example-billing.svg)

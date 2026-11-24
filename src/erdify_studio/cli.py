@@ -246,7 +246,7 @@ def _open(path: Path, *, port: int, browser: bool) -> int:
     shown = _display(config.layout)
     # Fail before serving, like `check`: no entities, an unreadable layout file.
     build_diagrams(project, config, shown_path=shown)
-    server = _server.start_server(lambda: _load(path), port=port, shown_path=shown)
+    server = _server.start_server(lambda: _load(path), port=port, display=_display)
     try:
         print(f"erdify-studio: serving {server.url} (Ctrl+C to stop)", flush=True)
         if browser:

@@ -100,9 +100,12 @@ def export_paths(diagrams: Iterable[str]) -> dict[str, PurePosixPath]:
         else:
             path = _GROUPS / f"{'ungrouped' if name == DEFAULT_GROUP else slug(name)}.svg"
         if path in owners:
+            # The entities without a group can't be renamed: name the group that can.
+            named = [n for n in (owners[path], name) if n != DEFAULT_GROUP]
+            fix = f"rename group {named[0]!r}" if len(named) == 1 else "rename one of the groups"
             raise ExportError(
                 f"{_described(owners[path])} and {_described(name)} would both be exported "
-                f"as {str(path)!r}; rename one of the groups"
+                f"as {str(path)!r}; {fix}"
             )
         owners[path] = name
         paths[name] = path

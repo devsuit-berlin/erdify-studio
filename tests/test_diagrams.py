@@ -12,6 +12,7 @@ from typing import Any
 import erdify
 import pytest
 
+import erdify_studio
 from erdify_studio import (
     DEFAULT_GROUP,
     OVERVIEW,
@@ -474,6 +475,26 @@ def test_after_save_check_passes(tmp_path: Path) -> None:
 def test_save_returns_the_new_revision(tmp_path: Path) -> None:
     root = _project(tmp_path)
     assert _save(root, _positions()) == layout_revision(root / "erdify-layout.json")
+
+
+def test_save_returns_the_revision_of_what_it_wrote(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An external write right after ours must not be taken as our revision: the next
+    # Save would then overwrite it without a conflict.
+    root = _project(tmp_path)
+    written: list[str] = []
+    save = erdify_studio.save_layout
+
+    def save_then_external_edit(layout: Any, path: Path) -> None:
+        save(layout, path)
+        written.append(path.read_text(encoding="utf-8"))
+        path.write_text(written[0] + "\n", encoding="utf-8")
+
+    monkeypatch.setattr("erdify_studio._diagrams.save_layout", save_then_external_edit)
+    revision = _save(root, _positions())
+    assert revision == hashlib.sha256(written[0].encode()).hexdigest()
+    assert revision != layout_revision(root / "erdify-layout.json")
 
 
 def test_save_places_the_group_diagrams(tmp_path: Path) -> None:

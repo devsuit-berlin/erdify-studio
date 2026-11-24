@@ -126,6 +126,21 @@ def test_groups_exported_to_the_same_file_are_an_error(a: str, b: str) -> None:
     assert shown(a) in str(raised.value) and shown(b) in str(raised.value)
 
 
+@pytest.mark.parametrize("names", [("ungrouped", DEFAULT_GROUP), (DEFAULT_GROUP, "ungrouped")])
+def test_a_collision_with_the_default_group_names_the_group_to_rename(
+    names: tuple[str, str],
+) -> None:
+    # The entities without a group can't be renamed: only the named group can.
+    with pytest.raises(ExportError) as raised:
+        export_paths([OVERVIEW, *names])
+    assert "rename group 'ungrouped'" in str(raised.value)
+
+
+def test_a_collision_of_two_groups_asks_to_rename_one(tmp_path: Path) -> None:
+    with pytest.raises(ExportError, match="rename one of the groups"):
+        export_paths([OVERVIEW, "Sales", "sales"])
+
+
 def test_a_collision_writes_nothing(tmp_path: Path) -> None:
     models = (
         MODELS.replace('"schema": "core"', '"schema": "Sales"')
