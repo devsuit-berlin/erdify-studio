@@ -157,4 +157,8 @@ def palette_of(colors: DiagramColors) -> Palette:
     )
 
 
+#: The canvas diagram's light theme (Nuxt UI tokens with neutral "slate" in
+#: vite.config.ts; the accent is `--erd-primary` in frontend/src/style.css, Tailwind
+#: indigo-500, independent of the UI's devsuit primary), as sRGB hex of the Tailwind v4
+#: OKLCH values.
 DEFAULT_PALETTE = resolve_palette()

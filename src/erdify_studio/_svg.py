@@ -18,6 +18,7 @@ import re
 from collections.abc import Mapping
 from xml.sax.saxutils import escape, quoteattr
 
+from erdify_studio._colors import DEFAULT_PALETTE, Palette
 from erdify_studio._diagrams import BoxDef, DiagramJson, EdgeEndJson, FieldRow
 from erdify_studio._geometry import (
     Rect,
@@ -28,20 +29,6 @@ from erdify_studio._geometry import (
     fixed2,
     self_loop,
 )
-
-#: The canvas diagram's light theme (Nuxt UI tokens with neutral "slate" in
-#: vite.config.ts; the accent is `--erd-primary` in frontend/src/style.css, Tailwind
-#: indigo-500, independent of the UI's devsuit primary), as sRGB hex of the Tailwind v4
-#: OKLCH values.
-_BG = "#ffffff"  # --ui-bg
-_BG_MUTED = "#f8fafc"  # --ui-bg-muted (slate-50)
-_BG_ACCENTED = "#e2e8f0"  # --ui-bg-accented (slate-200)
-_BORDER = "#e2e8f0"  # --ui-border (slate-200)
-_BORDER_ACCENTED = "#cad5e2"  # --ui-border-accented (slate-300)
-_TEXT_HIGHLIGHTED = "#0f172b"  # --ui-text-highlighted (slate-900)
-_TEXT_MUTED = "#62748e"  # --ui-text-muted (slate-500)
-_PRIMARY = "#615fff"  # --erd-primary (indigo-500)
-_ENUM_HEADER = "#d8deff"  # color-mix(in oklab, --erd-primary 22%, --ui-bg)
 
 #: The canvas font; the box widths assume its advance of 0.6 em (FONT_ADVANCE).
 _FONT_FAMILY = '"JetBrains Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace'
@@ -71,9 +58,15 @@ def _tidy(path: str) -> str:
 
 
 def render_svg(
-    diagram: DiagramJson, boxes: Mapping[str, BoxDef], metrics: Mapping[str, int]
+    diagram: DiagramJson,
+    boxes: Mapping[str, BoxDef],
+    metrics: Mapping[str, int],
+    palette: Palette = DEFAULT_PALETTE,
 ) -> str:
-    """The SVG of ``diagram`` (one entry of ``build_diagrams``'s ``diagrams``)."""
+    """The SVG of ``diagram`` (one entry of ``build_diagrams``'s ``diagrams``).
+
+    ``palette`` defaults to the canvas's light theme, which the golden files pin.
+    """
     rects = _rects(diagram, boxes)
     loops = {e["from"]: 0 for e in diagram["edges"] if e["from"] == e["to"]}
     offsets = fan_offsets([(e["from"], e["to"]) for e in diagram["edges"]])
@@ -102,7 +95,7 @@ def render_svg(
         f'viewBox="{n(left)} {n(top)} {n(width)} {n(height)}" '
         f'width="{n(width)}" height="{n(height)}">',
         f'  <rect x="{n(left)}" y="{n(top)}" width="{n(width)}" height="{n(height)}" '
-        f'fill="{_BG}"/>',
+        f'fill="{palette.background}"/>',
     ]
     for link in diagram["enumLinks"]:
         start, end = edge_line(
@@ -110,13 +103,20 @@ def render_svg(
         )
         out += [
             '  <g class="enum-link">',
-            f'    <path d="{_line(start, end)}" fill="none" stroke="{_TEXT_MUTED}" '
+            f'    <path d="{_line(start, end)}" fill="none" stroke="{palette.text_muted}" '
             'stroke-width="1.25" stroke-dasharray="4 4"/>',
             "  </g>",
         ]
     for edge, offset in zip(diagram["edges"], offsets, strict=True):
         out += _edge(
-            edge["from"], edge["to"], edge["fromEnd"], edge["toEnd"], edge["label"], offset, rects
+            edge["from"],
+            edge["to"],
+            edge["fromEnd"],
+            edge["toEnd"],
+            edge["label"],
+            offset,
+            rects,
+            palette,
         )
     font_size = metrics["charWidth"] / _FONT_ADVANCE
     foreign = set(diagram["foreign"])
@@ -124,7 +124,7 @@ def render_svg(
     prefix = _NOT_ID.sub("-", diagram["name"]).strip("-") or "diagram"
     for i, key in enumerate(sorted(rects)):
         clip = f"clip-{prefix}-{i}"
-        out += _box(key, boxes[key], rects[key], metrics, font_size, key in foreign, clip)
+        out += _box(key, boxes[key], rects[key], metrics, font_size, key in foreign, clip, palette)
     out.append("</svg>")
     return "\n".join(out) + "\n"
 
@@ -154,6 +154,7 @@ def _edge(
     label: str,
     offset: float,
     rects: Mapping[str, Rect],
+    palette: Palette,
 ) -> list[str]:
     if source == target:
         loop = self_loop(rects[source], int(offset))
@@ -163,7 +164,7 @@ def _edge(
         start, end = edge_line(rects[source], rects[target], offset, source, target)
         path = _line(start, end)
         start_angle, end_angle = angle(start, end), angle(end, start)
-    stroke = f'fill="none" stroke="{_TEXT_MUTED}" stroke-width="1.25"'
+    stroke = f'fill="none" stroke="{palette.text_muted}" stroke-width="1.25"'
     out = ['  <g class="edge">']
     if label:
         out.append(f"    <title>{escape(label)}</title>")
@@ -173,8 +174,8 @@ def _edge(
         out.append(f'    <path d="{_tidy(marker.lines)}" {stroke}/>')
         if marker.circle:
             out.append(
-                f'    <path d="{_tidy(marker.circle)}" fill="{_BG_MUTED}" stroke="{_TEXT_MUTED}" '
-                'stroke-width="1.25"/>'
+                f'    <path d="{_tidy(marker.circle)}" fill="{palette.background_muted}" '
+                f'stroke="{palette.text_muted}" stroke-width="1.25"/>'
             )
     out.append("  </g>")
     return out
@@ -188,6 +189,7 @@ def _box(
     font_size: float,
     foreign: bool,
     clip: str,
+    palette: Palette,
 ) -> list[str]:
     n = format_number
     w, h = n(rect.width), n(rect.height)
@@ -197,9 +199,10 @@ def _box(
     def baseline(top: float, height: float) -> str:
         return n(top + height / 2 + font_size * 0.35)
 
-    body = _BG_MUTED if foreign else _BG
-    head = _BG_MUTED if foreign else _ENUM_HEADER if box["kind"] == "enum" else _BG_ACCENTED
-    title = _TEXT_MUTED if foreign else _TEXT_HIGHLIGHTED
+    enum = box["kind"] == "enum"
+    body = palette.background_muted if foreign else palette.background
+    head = palette.background_muted if foreign else palette.enum_header if enum else palette.header
+    title = palette.text_muted if foreign else palette.enum_title if enum else palette.header_text
     out = [
         f'  <g transform="translate({n(rect.x)} {n(rect.y)})" data-key={quoteattr(key)} '
         f'font-family={quoteattr(_FONT_FAMILY)} font-size="{n(font_size)}">',
@@ -215,7 +218,9 @@ def _box(
         top = header + i * row
         y = baseline(top, row)
         if i > 0:
-            out.append(f'      <line x1="0" x2="{w}" y1="{top}" y2="{top}" stroke="{_BORDER}"/>')
+            out.append(
+                f'      <line x1="0" x2="{w}" y1="{top}" y2="{top}" stroke="{palette.border}"/>'
+            )
         if "type" in item:
             field: FieldRow = item  # type: ignore[assignment]
             badges = " ".join(
@@ -230,22 +235,22 @@ def _box(
             name_x = n(inset + _MARKER_CHARS * metrics["charWidth"])
             type_text = field["type"] + ("?" if field["nullable"] else "")
             out += [
-                f'      <text x="{n(inset)}" y="{y}" font-weight="700" fill="{_PRIMARY}">'
+                f'      <text x="{n(inset)}" y="{y}" font-weight="700" fill="{palette.accent}">'
                 f"{escape(badges)}</text>",
-                f'      <text x="{name_x}" y="{y}" fill="{_TEXT_HIGHLIGHTED}">'
+                f'      <text x="{name_x}" y="{y}" fill="{palette.text}">'
                 f"{escape(field['name'])}</text>",
                 f'      <text x="{n(rect.width - inset)}" y="{y}" text-anchor="end" '
-                f'fill="{_TEXT_MUTED}">{escape(type_text)}</text>',
+                f'fill="{palette.text_muted}">{escape(type_text)}</text>',
             ]
         else:
             out.append(
-                f'      <text x="{n(inset)}" y="{y}" fill="{_TEXT_HIGHLIGHTED}">'
+                f'      <text x="{n(inset)}" y="{y}" fill="{palette.text}">'
                 f"{escape(item['name'])}</text>"
             )
     dash = ' stroke-dasharray="4 3"' if foreign else ""
     out += [
         "    </g>",
-        f'    <rect width="{w}" height="{h}" rx="6" fill="none" stroke="{_BORDER_ACCENTED}" '
+        f'    <rect width="{w}" height="{h}" rx="6" fill="none" stroke="{palette.border_accented}" '
         f'stroke-width="1"{dash}/>',
         "  </g>",
     ]

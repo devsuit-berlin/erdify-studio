@@ -735,3 +735,29 @@ def test_merge_keeps_a_resized_box_in_place(tmp_path: Path) -> None:
         assert "core.customers" not in diagram["new"]
     rows = merged["boxes"]["core.customers"]["rows"]
     assert [r["name"] for r in rows] == ["id", "email", "phone"]
+
+
+def test_an_empty_colors_table_changes_nothing(tmp_path: Path) -> None:
+    # tests/fixtures/export pins the default palette's bytes (test_svg.py, fixed
+    # positions); here the same project is exported with and without the table
+    plain = _project(tmp_path / "plain")
+    empty = _project(
+        tmp_path / "empty", studio='export_dir = "docs/erd"\n[tool.erdify-studio.colors]\n'
+    )
+    _export(plain)
+    _export(empty)
+    for name in FILES:
+        assert (empty / "docs/erd" / name).read_bytes() == (plain / "docs/erd" / name).read_bytes()
+
+
+def test_export_follows_the_configured_colors(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    _export(root)
+    assert _check(root) == []
+    pyproject = root / "pyproject.toml"
+    pyproject.write_text(
+        pyproject.read_text() + '[tool.erdify-studio.colors]\naccent = "#4150aa"\n'
+    )
+    assert SvgProblem(root / "docs/erd/overview.svg", "outdated") in _check(root)
+    _export(root)
+    assert "#4150aa" in (root / "docs/erd/overview.svg").read_text()

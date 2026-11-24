@@ -21,6 +21,7 @@ from typing import Literal
 from erdify import Project
 
 from erdify_studio._check import Problem, check_project, project_diagrams
+from erdify_studio._colors import Palette, palette_of
 from erdify_studio._config import StudioConfig
 from erdify_studio._diagrams import (
     Diagrams,
@@ -128,14 +129,15 @@ def export_files(project: Project, config: StudioConfig) -> dict[PurePosixPath, 
     problems = check_project(project, config)
     if problems is None or problems:
         raise OutOfDateLayoutError(problems)
-    return _files(build_diagrams(project, config, shown_path=str(config.layout)))
+    payload = build_diagrams(project, config, shown_path=str(config.layout))
+    return _files(payload, palette_of(config.colors))
 
 
-def _files(payload: Diagrams) -> dict[PurePosixPath, str]:
+def _files(payload: Diagrams, palette: Palette) -> dict[PurePosixPath, str]:
     """Every SVG of ``payload`` (path relative to ``export_dir`` -> text)."""
     paths = export_paths(d["name"] for d in payload["diagrams"])
     return {
-        paths[d["name"]]: render_svg(d, payload["boxes"], payload["metrics"])
+        paths[d["name"]]: render_svg(d, payload["boxes"], payload["metrics"], palette)
         for d in payload["diagrams"]
     }
 
@@ -202,7 +204,9 @@ def build_studio(project: Project, config: StudioConfig, *, shown_path: str) -> 
     try:
         # The payload's positions are the layout file's here: render from it again
         # instead of building it a second time (what `check_exports` does).
-        payload["pending"]["svgs"] = len(_compare(_export_dir(config), _files(payload)))
+        payload["pending"]["svgs"] = len(
+            _compare(_export_dir(config), _files(payload, palette_of(config.colors)))
+        )
     except (ExportError, OSError) as e:
         # Studio must still open; Save and `export` report the problem.
         logger.info(f"cannot compare the SVGs in {str(config.export_dir)!r}: {e}")
@@ -241,7 +245,7 @@ def render_download(
     placed = layout.diagrams.get(diagram, {})  # an empty diagram has no entries
     found["positions"] = {key: [x, y] for key, (x, y) in placed.items()}
     name = "overview.svg" if diagram == OVERVIEW else export_paths([diagram])[diagram].name
-    return name, render_svg(found, payload["boxes"], payload["metrics"])
+    return name, render_svg(found, payload["boxes"], payload["metrics"], palette_of(config.colors))
 
 
 def merge_studio(
