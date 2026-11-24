@@ -279,7 +279,13 @@ def test_paths_outside_static_or_missing_are_404(studio: Studio, path: str) -> N
 
 @pytest.mark.parametrize("token", [None, "wrong"])
 @pytest.mark.parametrize(
-    ("method", "path"), [("GET", "/api/diagrams"), ("PUT", "/api/layout"), ("POST", "/api/svg")]
+    ("method", "path"),
+    [
+        ("GET", "/api/diagrams"),
+        ("PUT", "/api/layout"),
+        ("POST", "/api/svg"),
+        ("POST", "/api/colors"),
+    ],
 )
 def test_api_requires_the_token(studio: Studio, token: str | None, method: str, path: str) -> None:
     headers = {"X-Studio-Token": token} if token else {}
@@ -570,19 +576,31 @@ def test_post_colors_null_keeps_the_default(studio: Studio) -> None:
 
 
 @pytest.mark.parametrize(
-    ("payload", "mentions"),
+    ("payload", "mentions", "key"),
     [
-        ({"colors": {"edge": "#000000"}}, "'edge'"),
-        ({"colors": {"accent": "#41"}}, "'#41'"),
-        ({"colors": {"accent": 1}}, "1"),
-        ({"colors": []}, "colors"),
-        ({}, "colors"),
+        ({"colors": {"edge": "#000000"}}, "'edge'", "edge"),
+        ({"colors": {"accent": "#41"}}, "'#41'", "accent"),
+        ({"colors": {"accent": 1}}, "1", "accent"),
+        # A value naming another key: the response still names the right one.
+        ({"colors": {"border": "'text'"}}, "'border'", "border"),
+        ({"colors": []}, "colors", None),
+        ({}, "colors", None),
     ],
 )
-def test_post_colors_errors(studio: Studio, payload: object, mentions: str) -> None:
+def test_post_colors_errors(
+    studio: Studio, payload: object, mentions: str, key: str | None
+) -> None:
     status, _, body = _post_colors(studio, payload)
     assert status == 400
-    assert mentions in _json(body)["error"]
+    error = _json(body)
+    assert mentions in error["error"]
+    assert error.get("key") == key
+
+
+def test_post_colors_bug_is_500(studio: Studio, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("erdify_studio._server.palette_of", _crash)
+    status, _, body = _post_colors(studio, {"colors": {"accent": "#4150aa"}})
+    assert (status, _json(body)) == (500, {"error": "internal error (see the terminal)"})
 
 
 def test_post_colors_with_a_malformed_body_is_400(studio: Studio) -> None:
@@ -669,7 +687,9 @@ def test_post_svg_with_a_malformed_body_is_400(studio: Studio) -> None:
     assert status == 400
 
 
-@pytest.mark.parametrize(("method", "path"), [("PUT", "/api/layout"), ("POST", "/api/svg")])
+@pytest.mark.parametrize(
+    ("method", "path"), [("PUT", "/api/layout"), ("POST", "/api/svg"), ("POST", "/api/colors")]
+)
 def test_writes_from_a_foreign_host_are_refused(studio: Studio, method: str, path: str) -> None:
     status, _, _ = studio.request(method, path, b"{}", headers={"Host": "evil.example"})
     assert status == 403

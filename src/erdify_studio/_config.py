@@ -8,7 +8,13 @@ from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Literal, cast, get_args
 
-from erdify_studio._colors import DEFAULT_PALETTE, HEX, DiagramColors, contrast
+from erdify_studio._colors import (
+    DEFAULT_PALETTE,
+    ColorError,
+    DiagramColors,
+    color_value,
+    contrast,
+)
 from erdify_studio._errors import ConfigError
 
 logger = logging.getLogger(__name__)
@@ -116,13 +122,10 @@ def _colors_table(table: dict[str, object], source: str) -> DiagramColors:
     for key in _COLOR_KEYS:
         if key not in raw:
             continue
-        value = raw[key]
-        if not isinstance(value, str) or not HEX.fullmatch(value):
-            raise ConfigError(
-                f'[tool.{_TABLE}.colors] {key!r} must be a "#rrggbb" colour, '
-                f"got {value!r} in {source}"
-            )
-        values[key] = value.lower()
+        try:
+            values[key] = color_value(key, raw[key])
+        except ColorError as e:
+            raise ConfigError(f"[tool.{_TABLE}.colors] {e} in {source}") from e
     if "background" in values or "text" in values:
         background = values.get("background", DEFAULT_PALETTE.background)
         text = values.get("text", DEFAULT_PALETTE.text)

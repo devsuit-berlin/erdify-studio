@@ -23,6 +23,25 @@ _DARK_TEXT = "#0f172b"
 _ENUM_MIX = 0.22
 
 
+class ColorError(ConfigError):
+    """A colour value that isn't ``#rrggbb``; ``key`` names the colour."""
+
+    def __init__(self, key: str, value: object) -> None:
+        super().__init__(f'{key!r} must be a "#rrggbb" colour, got {value!r}')
+        self.key = key
+
+
+def color_value(key: str, value: object) -> str:
+    """``value`` as a lowercase ``#rrggbb`` colour for ``key``.
+
+    Raises:
+        ColorError: ``value`` is not a ``#rrggbb`` string.
+    """
+    if not isinstance(value, str) or not HEX.fullmatch(value):
+        raise ColorError(key, value)
+    return value.lower()
+
+
 @dataclass(frozen=True)
 class DiagramColors:
     """The colours a project may set (lowercase ``#rrggbb``); ``None`` keeps the default."""
