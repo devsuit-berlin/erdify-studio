@@ -255,3 +255,29 @@ def test_render_svg_uses_the_palette(tmp_path: Path) -> None:
     foreign = next(g for g in root.iter() if g.get("data-key") == "billing.invoices")
     assert next(r for r in foreign.iter(f"{ns}rect") if r.get("fill")).get("fill") == "#f8fafc"
     assert "<style" not in svg
+
+
+def test_the_enum_box_follows_the_header_colour_only_for_entities(tmp_path: Path) -> None:
+    payload = _payload(_project(tmp_path))
+    diagram = next(d for d in payload["diagrams"] if d["name"] == OVERVIEW)
+    svg = render_svg(
+        diagram, payload["boxes"], payload["metrics"], resolve_palette(header="#192346")
+    )
+    ns = "{http://www.w3.org/2000/svg}"
+    root = ET.fromstring(svg)
+
+    def parts(key: str) -> tuple[str | None, dict[str | None, str | None]]:
+        box = next(g for g in root.iter() if g.get("data-key") == key)
+        head = next(
+            r
+            for r in box.iter(f"{ns}rect")
+            if r.get("height") and r.get("fill") != "none" and r.get("rx") is None
+        )
+        return head.get("fill"), {t.text: t.get("fill") for t in box.iter(f"{ns}text")}
+
+    head, texts = parts("core.customers")
+    assert (head, texts["core.customers"], texts["email"]) == ("#192346", "#ffffff", "#0f172b")
+    head, texts = parts("enum:Status")
+    assert head == "#d8deff"
+    assert texts[next(t for t in texts if t and t.endswith("Status"))] == "#0f172b"
+    assert texts["OPEN"] == "#0f172b"
