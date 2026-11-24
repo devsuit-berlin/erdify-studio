@@ -31,6 +31,12 @@ erdify's own, with crow's-foot ends.
 - If the layout file changes on disk (a `git checkout`, another tab), studio says so;
   Save then refuses instead of overwriting it: reload the page.
 - Closing the tab with unsaved changes asks first.
+- **Colours** opens a panel to try [diagram colours](../configuration.md#diagram-colours)
+  on the canvas: a picker and a hex field per key, grouped into Brand and Details. The
+  canvas previews them right away (in light mode); nothing is written. **Copy TOML**
+  puts the matching `[tool.erdify-studio.colors]` table on the clipboard to paste into
+  `pyproject.toml`, **Reset** drops the panel's changes. When the colours in
+  `pyproject.toml` change, the panel starts over from them.
 
 Like `check`, it exits 2 without starting when the canvas is not built (a source
 checkout without `uv run poe frontend`), when the project, its config or the layout
