@@ -12,7 +12,6 @@ from typing import Any
 import erdify
 import pytest
 
-import erdify_studio
 from erdify_studio import (
     DEFAULT_GROUP,
     OVERVIEW,
@@ -484,7 +483,7 @@ def test_save_returns_the_revision_of_what_it_wrote(
     # Save would then overwrite it without a conflict.
     root = _project(tmp_path)
     written: list[str] = []
-    save = erdify_studio.save_layout
+    save = save_layout
 
     def save_then_external_edit(layout: Any, path: Path) -> None:
         save(layout, path)

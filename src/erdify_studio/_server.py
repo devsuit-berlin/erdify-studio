@@ -59,11 +59,12 @@ MAX_BODY = 10 * 1024 * 1024
 
 _TOKEN_HEADER = "X-Studio-Token"
 #: The page loads nothing but its own files. Styles allow inline: Nuxt UI injects its
-#: colour variables as <style> elements and Vue sets style attributes. The SVG
-#: download is a blob: URL, the font a bundled file.
+#: colour variables as <style> elements and Vue sets style attributes. ``data:``: Vite
+#: inlines small font subsets and an SVG image into the bundle. (The SVG download is
+#: a blob: link the page navigates to, which ``img-src`` doesn't govern.)
 _CSP = (
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-    "img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; "
+    "img-src 'self' data:; font-src 'self' data:; connect-src 'self'; "
     "object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 )
 #: The page URL's token in a logged request line (``GET /?token=… HTTP/1.1``).
