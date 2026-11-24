@@ -5,13 +5,15 @@ them into the full ``Palette`` the SVG export and the canvas use. Derived colour
 computed in OKLab (mixing) and by WCAG 2.x contrast (text on a coloured background).
 Colours are lowercase ``#rrggbb`` strings; callers normalise before calling.
 
-This module imports nothing from the package, so ``_config`` can import it.
+This module imports only ``_errors`` from the package, so ``_config`` can import it.
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
+
+from erdify_studio._errors import ConfigError
 
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 
@@ -29,6 +31,14 @@ class DiagramColors:
     header: str | None = None
     header_text: str | None = None
     background: str | None = None
+
+    def __post_init__(self) -> None:
+        for field in fields(self):
+            value = getattr(self, field.name)
+            if value is None:
+                continue
+            if not isinstance(value, str) or not HEX.fullmatch(value) or value != value.lower():
+                raise ConfigError(f"{field.name} must be a lowercase #rrggbb colour, got {value!r}")
 
 
 @dataclass(frozen=True)

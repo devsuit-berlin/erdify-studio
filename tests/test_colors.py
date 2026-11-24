@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from erdify_studio._colors import (
@@ -15,6 +17,7 @@ from erdify_studio._colors import (
     readable_text,
     resolve_palette,
 )
+from erdify_studio._errors import ConfigError
 
 
 def test_defaults_are_todays_colours() -> None:
@@ -77,3 +80,18 @@ def test_palette_of() -> None:
 )
 def test_hex_pattern(value: str, valid: bool) -> None:
     assert bool(HEX.match(value)) is valid
+
+
+@pytest.mark.parametrize("value", ["red", "#ABCDEF", "#abc", "#abcdeg", "#abcdef\n", ""])
+def test_diagram_colors_reject_invalid_values(value: str) -> None:
+    with pytest.raises(ConfigError, match=re.escape(repr(value))):
+        DiagramColors(accent=value)
+
+
+def test_diagram_colors_name_the_field() -> None:
+    with pytest.raises(ConfigError, match="header_text"):
+        DiagramColors(header_text="red")
+
+
+def test_diagram_colors_accept_lowercase_hex() -> None:
+    assert DiagramColors(accent="#abcdef").accent == "#abcdef"
