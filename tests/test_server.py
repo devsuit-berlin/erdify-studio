@@ -589,13 +589,19 @@ _BIG_BODY = b"{" + b" " * 60000 + b"}"
 
 
 def _raw_request(
-    studio: Studio, method: str, path: str, body: bytes, *, token: bool = False, length: int = -1
+    studio: Studio,
+    method: str,
+    path: str,
+    body: bytes,
+    *,
+    token: bool = False,
+    length: int | None = None,
 ) -> bytes:
     token_header = f"X-Studio-Token: {studio.server.token}\r\n" if token else ""
     return (
         f"{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{studio.port}\r\n{token_header}"
         f"Content-Type: application/json\r\n"
-        f"Content-Length: {len(body) if length < 0 else length}\r\n\r\n"
+        f"Content-Length: {len(body) if length is None else length}\r\n\r\n"
     ).encode() + body
 
 
