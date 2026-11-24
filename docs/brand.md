@@ -16,10 +16,8 @@ card**.
 <p align="center">
   <img alt="erdify-studio icon" src="assets/erdify-studio-icon.svg" width="160">
   &nbsp;&nbsp;
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/erdify-studio-wordmark-dark.svg">
-    <img alt="erdify-studio wordmark" src="assets/erdify-studio-wordmark-light.svg" width="320">
-  </picture>
+  <img alt="erdify-studio wordmark" src="assets/erdify-studio-wordmark-light.svg#gh-light-mode-only" width="320">
+  <img alt="erdify-studio wordmark" src="assets/erdify-studio-wordmark-dark.svg#gh-dark-mode-only" width="320">
 </p>
 
 ### Anatomy

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Docs site: the icon and wordmark on the Brand page load again. A docs hook
+  (`scripts/mkdocs_raw_html_urls.py`) resolves relative `src`/`srcset` in raw HTML for
+  the page URL, and a broken one fails the strict build. The wordmark follows the site's
+  light/dark toggle instead of the operating system's setting.
+
 ## [0.1.2] - 2026-11-24
 
 ### Changed
