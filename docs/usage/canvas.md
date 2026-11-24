@@ -39,7 +39,10 @@ erdify's own, with crow's-foot ends.
   canvas previews them right away (in light mode); nothing is written. **Copy TOML**
   puts the whole `[tool.erdify-studio.colors]` table on the clipboard: replace the table
   in `pyproject.toml` with it (it already holds the keys set there). **Reset** drops the
-  panel's changes; × steps a row back (an edit → the file's value → unset). While the
+  panel's changes; × steps a row back (an edit → the file's value → unset). A row that
+  isn't `#rrggbb` yet turns red and stays out of the preview, so the other rows keep
+  previewing (Copy TOML waits until it is fixed). Rows not set anywhere are greyed and
+  say "default", or "automatic" for a header text that follows the header. While the
   panel has changes, the Colours button says "preview": **Download SVG** keeps using
   `pyproject.toml`. When the colours in `pyproject.toml` change, the panel starts over
   from them.
