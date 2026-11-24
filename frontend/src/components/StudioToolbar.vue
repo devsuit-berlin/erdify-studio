@@ -7,6 +7,7 @@ const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 
 <template>
   <header class="flex items-center gap-3 border-b border-default px-4 py-2">
+    <img src="/favicon.svg" alt="" class="size-6 shrink-0" />
     <span class="font-semibold">erdify-studio · {{ title }}</span>
     <UBadge v-if="dirty" color="warning" variant="subtle" icon="i-lucide-circle-dot" label="Unsaved changes" />
     <UButton
