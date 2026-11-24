@@ -29,8 +29,10 @@ from erdify_studio._geometry import (
     self_loop,
 )
 
-#: Studio's light theme (Nuxt UI tokens, primary "indigo", neutral "slate" in
-#: vite.config.ts), as sRGB hex of the Tailwind v4 OKLCH values.
+#: The canvas diagram's light theme (Nuxt UI tokens with neutral "slate" in
+#: vite.config.ts; the accent is `--erd-primary` in frontend/src/style.css, Tailwind
+#: indigo-500, independent of the UI's devsuit primary), as sRGB hex of the Tailwind v4
+#: OKLCH values.
 _BG = "#ffffff"  # --ui-bg
 _BG_MUTED = "#f8fafc"  # --ui-bg-muted (slate-50)
 _BG_ACCENTED = "#e2e8f0"  # --ui-bg-accented (slate-200)
@@ -38,7 +40,7 @@ _BORDER = "#e2e8f0"  # --ui-border (slate-200)
 _BORDER_ACCENTED = "#cad5e2"  # --ui-border-accented (slate-300)
 _TEXT_HIGHLIGHTED = "#0f172b"  # --ui-text-highlighted (slate-900)
 _TEXT_MUTED = "#62748e"  # --ui-text-muted (slate-500)
-_PRIMARY = "#615fff"  # --ui-primary (indigo-500)
+_PRIMARY = "#615fff"  # --erd-primary (indigo-500)
 _ENUM_HEADER = "#d8deff"  # color-mix(in oklab, --ui-primary 22%, --ui-bg)
 
 #: The canvas font; the box widths assume its advance of 0.6 em (FONT_ADVANCE).

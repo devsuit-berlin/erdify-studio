@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The docs site moved to <https://erdify-studio.devsuit.io/>.
+- The studio UI uses the devsuit palette of `docs/brand.md` (buttons, banners; periwinkle in
+  dark mode) and shows the studio icon in the header. The diagram keeps its colours, so
+  the canvas still matches the SVG export and exported SVGs don't change.
 
 ## [0.1.0] - 2026-11-23
 

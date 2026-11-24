@@ -95,7 +95,7 @@ export default defineConfig({
       // Bundle the icons the app uses from @iconify-json/lucide: nothing is fetched at
       // runtime (no Iconify API). scripts/check_static.py guards the build.
       icon: { clientBundle: { scan: true } },
-      ui: { colors: { primary: "indigo", neutral: "slate" } },
+      ui: { colors: { primary: "devsuit", neutral: "slate" } },
     }),
   ],
   base: "./",

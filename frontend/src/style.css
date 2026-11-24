@@ -6,3 +6,31 @@
 @theme {
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
+
+/* The devsuit palette (docs/brand.md) as a Tailwind colour scale, Nuxt UI's
+   `primary` (vite.config.ts). Nuxt UI uses 500 in light and 400 in dark mode:
+   500 is devsuit indigo, 400 the periwinkle the brand uses on dark backgrounds,
+   200 the lavender and 900 the navy of the logo. */
+@theme static {
+  --color-devsuit-50: #eef0fa;
+  --color-devsuit-100: #dde1f4;
+  --color-devsuit-200: #c5cae9;
+  --color-devsuit-300: #a9b4f4;
+  --color-devsuit-400: #8c9eff;
+  --color-devsuit-500: #4150aa;
+  --color-devsuit-600: #36438f;
+  --color-devsuit-700: #2c3775;
+  --color-devsuit-800: #222b5c;
+  --color-devsuit-900: #192346;
+  --color-devsuit-950: #10172f;
+}
+
+/* The diagram keeps its own accent, so the canvas stays drawn exactly like the
+   SVG export (_svg.py `_PRIMARY`, Tailwind indigo-500), whatever the UI's
+   primary is. Dark mode: indigo-400, as the canvas had before. */
+:root {
+  --erd-primary: oklch(58.5% 0.233 277.117);
+}
+.dark {
+  --erd-primary: oklch(67.3% 0.182 276.935);
+}

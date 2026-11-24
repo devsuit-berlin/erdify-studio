@@ -115,7 +115,7 @@ function baseline(top: number, height: number): number {
   fill: var(--ui-bg-accented);
 }
 .box--enum .box__header {
-  fill: color-mix(in oklab, var(--ui-primary) 22%, var(--ui-bg));
+  fill: color-mix(in oklab, var(--erd-primary) 22%, var(--ui-bg));
 }
 .box__frame {
   fill: none;
@@ -123,11 +123,11 @@ function baseline(top: number, height: number): number {
   stroke-width: 1;
 }
 .box--new .box__frame {
-  stroke: var(--ui-primary);
+  stroke: var(--erd-primary);
   stroke-width: 2;
 }
 .box--dragging .box__frame {
-  stroke: var(--ui-primary);
+  stroke: var(--erd-primary);
 }
 .box--foreign {
   cursor: pointer;
@@ -143,7 +143,7 @@ function baseline(top: number, height: number): number {
   fill: var(--ui-text-muted);
 }
 .box--highlighted .box__frame {
-  stroke: var(--ui-primary);
+  stroke: var(--erd-primary);
   stroke-width: 3;
 }
 .box__divider {
@@ -157,11 +157,11 @@ function baseline(top: number, height: number): number {
   fill: var(--ui-text-muted);
 }
 .box__badge {
-  fill: var(--ui-primary);
+  fill: var(--erd-primary);
   font-weight: 700;
 }
 .box__chip {
-  fill: var(--ui-primary);
+  fill: var(--erd-primary);
 }
 .box__chip-text {
   fill: var(--ui-bg);
