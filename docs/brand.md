@@ -16,7 +16,10 @@ card**.
 <p align="center">
   <img alt="erdify-studio icon" src="assets/erdify-studio-icon.svg" width="160">
   &nbsp;&nbsp;
-  <img alt="erdify-studio wordmark" src="assets/erdify-studio-wordmark-light.svg" width="440">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/erdify-studio-wordmark-dark.svg">
+    <img alt="erdify-studio wordmark" src="assets/erdify-studio-wordmark-light.svg" width="440">
+  </picture>
 </p>
 
 ### Anatomy
@@ -36,9 +39,18 @@ card**.
 - **Light/dark:** use the light wordmark on light backgrounds and the dark one on dark
   backgrounds. In READMEs, switch with `<picture>` and `prefers-color-scheme`. The icon
   works on both.
-- **README and PyPI:** reference the assets by absolute
-  `raw.githubusercontent.com/.../main/docs/assets/...` URLs. PyPI renders the README as
-  the long description, and relative paths break there.
+- **README and PyPI:** reference the assets by absolute `raw.githubusercontent.com` URLs
+  on `main`. PyPI renders the README as the long description, and relative paths break
+  there. The README heading:
+
+  ```html
+  <p align="center">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/devsuit-berlin/erdify-studio/main/docs/assets/erdify-studio-wordmark-dark.svg">
+      <img alt="erdify studio" src="https://raw.githubusercontent.com/devsuit-berlin/erdify-studio/main/docs/assets/erdify-studio-wordmark-light.svg" width="480">
+    </picture>
+  </p>
+  ```
 
 ### Don'ts
 
@@ -56,11 +68,11 @@ are WCAG 2.x.
 | Name | Hex | Role | Contrast |
 | --- | --- | --- | --- |
 | Indigo | `#4150AA` | Primary, icon frame, "erd", links (light) | 7.11:1 on white |
-| Indigo light | `#6573C3` | Primary, light variant | — |
+| Indigo light | `#6573C3` | Primary, light variant | 4.38:1 on white: large text and UI only |
 | Navy | `#192346` | Card headers, "ify", dark primary | 15.33:1 on white |
 | Cyan | `#18B4E0` | Accent on dark, "studio" (dark), dashed slot | 2.43:1 on white: **don't use for text on light** |
 | Cyan dark | `#087F9E` | Accent on light, "studio" (light), link hover | 4.63:1 on white (AA) |
-| Periwinkle | `#8C9EFF` | "erd" and links on dark backgrounds | 6.48:1 on `#1E2129` |
+| Periwinkle | `#8C9EFF` | "erd" and links on dark backgrounds | 6.48:1 on `#1E2129` (a dark background like Material's slate scheme) |
 | Yellow | `#F5DC19` | Key dot only (decorative) | 1.39:1 on white: never text |
 | Lavender | `#C5CAE9` | Field bars only (decorative) | — |
 | White | `#FFFFFF` | Cards, relation line, "ify" on dark | 7.11:1 on indigo |
@@ -73,7 +85,15 @@ are WCAG 2.x.
 
 ## Changing the assets
 
-- The SVGs are the sources. Regenerate the PNGs from them, e.g.
-  `rsvg-convert -w 1024 erdify-studio-icon.svg -o erdify-studio-icon-1024.png`
-  (wordmark PNGs at 1120 px height, favicon at 64 px).
+- The SVGs are the sources. Regenerate the PNGs with `rsvg-convert` (from librsvg, e.g.
+  `brew install librsvg` or `apt install librsvg2-bin`), from `docs/assets/`:
+
+  ```bash
+  rsvg-convert -w 1024 erdify-studio-icon.svg -o erdify-studio-icon-1024.png
+  rsvg-convert -w 512 erdify-studio-icon.svg -o erdify-studio-icon-512.png
+  rsvg-convert -w 64 erdify-studio-icon.svg -o favicon.png
+  rsvg-convert -h 1120 erdify-studio-wordmark-light.svg -o erdify-studio-wordmark-light.png
+  rsvg-convert -h 1120 erdify-studio-wordmark-dark.svg -o erdify-studio-wordmark-dark.png
+  cp erdify-studio-icon.svg ../../frontend/public/favicon.svg
+  ```
 - If erdify's icon or palette changes, update studio to match. The family look comes first.
