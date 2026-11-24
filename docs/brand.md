@@ -11,7 +11,7 @@ card**.
 | Icon | `docs/assets/erdify-studio-icon.svg` (`-512.png`, `-1024.png`) | Avatars, app icons, the docs header, square spaces |
 | Wordmark, light | `docs/assets/erdify-studio-wordmark-light.svg` (`.png`) | On white or light backgrounds |
 | Wordmark, dark | `docs/assets/erdify-studio-wordmark-dark.svg` (`.png`) | On dark backgrounds |
-| Favicon | `docs/assets/favicon.png` (64 px), `frontend/public/favicon.svg` | Browser tabs: docs site and the studio UI |
+| Favicon | `docs/assets/erdify-studio-favicon.svg` (source), `docs/assets/favicon.png` (64 px), `frontend/public/favicon.svg` | Browser tabs, the studio toolbar, anything below 48 px |
 
 <p align="center">
   <img alt="erdify-studio icon" src="assets/erdify-studio-icon.svg" width="160">
@@ -29,13 +29,18 @@ card**.
   bars, joined by a white relation line with a crow's foot. Same drawing as erdify's icon.
 - **Studio element:** the lower card is lifted out of its slot. The **dashed cyan outline**
   is where it was, and the **pointer** on its header is dragging it.
-- **Wordmark:** "erdify" uses erdify's own glyphs ("erd" indigo, "ify" navy). "studio" is
-  a monoline word in cyan, with the same round caps and line weight as the relation line.
+- **Wordmark:** "erdify" uses erdify's own glyphs (Roboto Bold, "erd" indigo, "ify" navy).
+  "studio" is a descriptor: Roboto Medium at about 64 % of the size, on the same baseline,
+  in cyan. One type family, and "erdify" stays the dominant word.
+- **Favicon:** a reduced icon for small sizes. Same frame, cards and dashed slot, but no
+  pointer, crow's foot, key dots or field bars, and heavier strokes, so it stays legible
+  at 16 px.
 
 ### Usage
 
 - **Clear space:** keep at least a quarter of the icon's height free on every side.
-- **Minimum size:** icon 16 px (favicon), wordmark 120 px wide.
+- **Minimum size:** full icon 48 px; below that use the favicon (down to 16 px). Wordmark
+  160 px wide.
 - **Light/dark:** use the light wordmark on light backgrounds and the dark one on dark
   backgrounds. In READMEs, switch with `<picture>` and `prefers-color-scheme`. The icon
   works on both.
@@ -57,6 +62,7 @@ card**.
 - Don't recolour, stretch, rotate or add effects (shadows, gradients, outlines).
 - Don't remove the dashed slot or the pointer from the icon. Without them it's erdify's icon.
 - Don't use the cyan "studio" word without "erdify", or type the wordmark in another font.
+- Don't use the full icon below 48 px, or the favicon above it.
 - Don't put the light wordmark on a dark background, or the other way round.
 - Don't use erdify's icon for studio, or studio's icon for erdify.
 
@@ -91,9 +97,9 @@ are WCAG 2.x.
   ```bash
   rsvg-convert -w 1024 erdify-studio-icon.svg -o erdify-studio-icon-1024.png
   rsvg-convert -w 512 erdify-studio-icon.svg -o erdify-studio-icon-512.png
-  rsvg-convert -w 64 erdify-studio-icon.svg -o favicon.png
+  rsvg-convert -w 64 erdify-studio-favicon.svg -o favicon.png
   rsvg-convert -h 1120 erdify-studio-wordmark-light.svg -o erdify-studio-wordmark-light.png
   rsvg-convert -h 1120 erdify-studio-wordmark-dark.svg -o erdify-studio-wordmark-dark.png
-  cp erdify-studio-icon.svg ../../frontend/public/favicon.svg
+  cp erdify-studio-favicon.svg ../../frontend/public/favicon.svg
   ```
 - If erdify's icon or palette changes, update studio to match. The family look comes first.

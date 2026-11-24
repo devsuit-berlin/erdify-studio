@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="erdify studio">
+<rect width="1024" height="1024" rx="224" fill="#4150AA"/>
+<path d="M520 300H664V500" stroke="#FFFFFF" stroke-width="56" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<rect x="112" y="148" width="408" height="304" rx="56" fill="#FFFFFF"/>
+<path d="M112 204a56 56 0 0 1 56-56h296a56 56 0 0 1 56 56v60H112z" fill="#192346"/>
+<rect x="548" y="604" width="376" height="292" rx="56" stroke="#18B4E0" stroke-width="44" stroke-dasharray="96 72" stroke-linecap="round" fill="none"/>
+<rect x="436" y="500" width="408" height="304" rx="56" fill="#FFFFFF"/>
+<path d="M436 556a56 56 0 0 1 56-56h296a56 56 0 0 1 56 56v60H436z" fill="#192346"/>
+</svg>

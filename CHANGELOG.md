@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Wordmark: "studio" is now a Roboto Medium descriptor next to "erdify" instead of a
+  monoline word, so the wordmark uses one type family.
+- Favicon: a simplified icon (no pointer, crow's foot, key dots or field bars) for the
+  docs site and the studio UI, legible at 16 px. Added `docs/assets/erdify-studio-favicon.svg` as its source.
+
 ## [0.1.1] - 2026-11-24
 
 ### Added
