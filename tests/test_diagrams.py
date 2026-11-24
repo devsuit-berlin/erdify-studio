@@ -793,6 +793,12 @@ def test_payload_carries_the_colors(tmp_path: Path) -> None:
         "background": "#ffffff",
         "enumHeader": "#d8deff",
         "enumTitle": "#0f172b",
+        "text": "#0f172b",
+        "textMuted": "#62748e",
+        "border": "#e2e8f0",
+        "borderStrong": "#cad5e2",
+        "backgroundMuted": "#f8fafc",
+        "accentText": "#ffffff",
     }
 
 

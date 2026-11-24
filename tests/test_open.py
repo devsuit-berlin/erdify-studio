@@ -86,7 +86,7 @@ def test_a_config_warning_is_logged_once_at_startup(
     )
     with caplog.at_level(logging.WARNING, logger="erdify_studio._config"):
         assert main(["--no-browser", str(root)]) == 0
-    assert len([r for r in caplog.records if "too dark" in r.getMessage()]) == 1
+    assert len([r for r in caplog.records if "too little contrast" in r.getMessage()]) == 1
 
 
 def test_the_open_command_by_name(tmp_path: Path, opened: list[str]) -> None:

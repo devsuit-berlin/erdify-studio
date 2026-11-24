@@ -26,7 +26,7 @@ def test_defaults_are_todays_colours() -> None:
         background="#ffffff",
         background_muted="#f8fafc",
         border="#e2e8f0",
-        border_accented="#cad5e2",
+        border_strong="#cad5e2",
         text="#0f172b",
         text_muted="#62748e",
         accent="#615fff",
@@ -34,6 +34,7 @@ def test_defaults_are_todays_colours() -> None:
         header_text="#0f172b",
         enum_header="#d8deff",
         enum_title="#0f172b",
+        accent_text="#ffffff",
     )
 
 
@@ -95,3 +96,36 @@ def test_diagram_colors_name_the_field() -> None:
 
 def test_diagram_colors_accept_lowercase_hex() -> None:
     assert DiagramColors(accent="#abcdef").accent == "#abcdef"
+
+
+def test_every_colour_can_be_set() -> None:
+    palette = resolve_palette(
+        text="#111111",
+        text_muted="#222222",
+        border="#333333",
+        border_strong="#444444",
+        background_muted="#555555",
+    )
+    assert (
+        palette.text,
+        palette.text_muted,
+        palette.border,
+        palette.border_strong,
+        palette.background_muted,
+    ) == ("#111111", "#222222", "#333333", "#444444", "#555555")
+    assert palette_of(DiagramColors(text="#111111", border_strong="#444444")) == resolve_palette(
+        text="#111111", border_strong="#444444"
+    )
+
+
+def test_accent_text_follows_the_accent() -> None:
+    assert resolve_palette(accent="#f5dc19").accent_text == "#0f172b"
+    assert resolve_palette(accent="#192346").accent_text == "#ffffff"
+
+
+@pytest.mark.parametrize(
+    "field", ["text", "text_muted", "border", "border_strong", "background_muted"]
+)
+def test_diagram_colors_validate_every_field(field: str) -> None:
+    with pytest.raises(ConfigError, match=field):
+        DiagramColors(**{field: "red"})

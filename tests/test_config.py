@@ -139,11 +139,11 @@ def test_colors_must_be_a_table(tmp_path: Path) -> None:
 def test_unknown_color_keys_are_warned_about(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    pyproject = _pyproject(tmp_path, '[tool.erdify-studio.colors]\nborder = "#000000"')
+    pyproject = _pyproject(tmp_path, '[tool.erdify-studio.colors]\nedge = "#000000"')
     with caplog.at_level(logging.WARNING, logger="erdify_studio"):
         config = load_config(pyproject)
     assert config.colors == DiagramColors()
-    assert "'border'" in caplog.text
+    assert "'edge'" in caplog.text
 
 
 def test_a_dark_background_is_warned_about(
@@ -161,6 +161,43 @@ def test_a_dark_background_is_warned_about(
     with caplog.at_level(logging.WARNING, logger="erdify_studio"):
         load_config(light)
     assert caplog.records == []
+
+
+def test_every_colour_key_is_read(tmp_path: Path) -> None:
+    table = "\n".join(
+        [
+            "[tool.erdify-studio.colors]",
+            'text = "#1A1A1A"',
+            'text_muted = "#555555"',
+            'border = "#DDDDDD"',
+            'border_strong = "#BBBBBB"',
+            'background_muted = "#F5F5F5"',
+        ]
+    )
+    assert load_config(_pyproject(tmp_path, table)).colors == DiagramColors(
+        text="#1a1a1a",
+        text_muted="#555555",
+        border="#dddddd",
+        border_strong="#bbbbbb",
+        background_muted="#f5f5f5",
+    )
+
+
+@pytest.mark.parametrize(
+    ("table", "warned"),
+    [
+        ('background = "#192346"\ntext = "#ffffff"', False),  # dark background, light text
+        ('text = "#eeeeee"', True),  # light text on the default white
+        ('background = "#192346"', True),  # dark background, default dark text
+    ],
+)
+def test_the_contrast_warning_uses_the_configured_text(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, table: str, warned: bool
+) -> None:
+    path = _pyproject(tmp_path, "[tool.erdify-studio.colors]\n" + table)
+    with caplog.at_level(logging.WARNING, logger="erdify_studio"):
+        load_config(path)
+    assert ("too little contrast" in caplog.text) is warned
 
 
 def test_diagram_colors_is_public() -> None:

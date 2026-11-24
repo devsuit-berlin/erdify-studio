@@ -135,6 +135,12 @@ class ColorsJson(TypedDict):
     background: str
     enumHeader: str
     enumTitle: str
+    text: str
+    textMuted: str
+    border: str
+    borderStrong: str
+    backgroundMuted: str
+    accentText: str
 
 
 class Diagrams(TypedDict):
@@ -276,6 +282,12 @@ def build_from(project: Project, config: StudioConfig, start: Layout, *, created
             "background": palette.background,
             "enumHeader": palette.enum_header,
             "enumTitle": palette.enum_title,
+            "text": palette.text,
+            "textMuted": palette.text_muted,
+            "border": palette.border,
+            "borderStrong": palette.border_strong,
+            "backgroundMuted": palette.background_muted,
+            "accentText": palette.accent_text,
         },
         "revision": None,
         "pending": _pending(result),
