@@ -17,44 +17,49 @@ import posixpath
 import re
 from typing import Any
 
-from mkdocs.structure.files import Files
+from mkdocs.structure.files import File, Files
 from mkdocs.structure.pages import Page
 from mkdocs.utils import get_relative_url
 
 log = logging.getLogger(f"mkdocs.hooks.{__name__}")
 
-# Attribute values in the rendered HTML; code blocks are escaped (&quot;), so they don't match.
-_ATTR = re.compile(r'(?P<attr>\b(?:src|srcset))="(?P<value>[^"]+)"')
+# Attribute values in the rendered HTML; code blocks are escaped (&quot;), so they don't
+# match. The lookbehind keeps `data-src=` and the like out.
+_ATTR = re.compile(r'(?<![\w-])(?P<attr>src|srcset)="(?P<value>[^"]+)"')
 
 
 def _is_relative(url: str) -> bool:
     return not (url.startswith(("/", "#", "data:", "mailto:")) or "://" in url)
 
 
+def _file(base: str, path: str, files: Files) -> File | None:
+    return files.get_file_from_path(posixpath.normpath(posixpath.join(base, path)))
+
+
 def _resolve(url: str, page: Page, files: Files) -> str:
     if not _is_relative(url):
         return url
-    path, _, fragment = url.partition("#")
-    target = posixpath.normpath(posixpath.join(posixpath.dirname(page.file.src_uri), path))
-    file = files.get_file_from_path(target)
-    if file is None:
-        # Already rewritten by MkDocs (a Markdown image, relative to the page URL),
-        # or a broken path.
-        from_url = posixpath.normpath(posixpath.join(posixpath.dirname(page.url), path))
-        if files.get_file_from_path(from_url) is None:
-            log.warning(f"{page.file.src_uri}: raw HTML URL {url!r} names no file in docs/")
+    # Only the path names a file; a query or fragment is kept as it is.
+    split = min((i for i in (url.find("?"), url.find("#")) if i != -1), default=len(url))
+    path, suffix = url[:split], url[split:]
+    # Already right for the page URL (e.g. a Markdown image MkDocs rewrote): leave it.
+    if _file(posixpath.dirname(page.url), path, files) is not None:
         return url
-    resolved = get_relative_url(file.url, page.url)
-    return f"{resolved}#{fragment}" if fragment else resolved
+    file = _file(posixpath.dirname(page.file.src_uri), path, files)
+    if file is None:
+        log.warning(f"{page.file.src_uri}: raw HTML URL {url!r} names no file in docs/")
+        return url
+    return get_relative_url(file.url, page.url) + suffix
 
 
 def _resolve_srcset(value: str, page: Page, files: Files) -> str:
+    if value.startswith("data:"):
+        return value  # may contain commas; not a list of file URLs
     # "a.svg, b.svg 2x": each candidate is a URL plus an optional descriptor.
     candidates = []
     for candidate in value.split(","):
         url, _, descriptor = candidate.strip().partition(" ")
-        resolved = _resolve(url, page, files)
-        candidates.append(f"{resolved} {descriptor}".rstrip())
+        candidates.append(f"{_resolve(url, page, files)} {descriptor}".rstrip())
     return ", ".join(candidates)
 
 

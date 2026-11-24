@@ -12,7 +12,7 @@ exclude_docs: |
   styleguide/
   claude-code/
 
-# Relative src/srcset in raw HTML (e.g. the <picture> in brand.md) resolved for the page URL.
+# Relative src/srcset in raw HTML (e.g. the logo <img> tags in brand.md) resolved for the page URL.
 hooks:
   - scripts/mkdocs_raw_html_urls.py
 
