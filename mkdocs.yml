@@ -78,3 +78,6 @@ markdown_extensions:
 
 plugins:
   - search
+  # Downloads external assets (the Google Fonts) at build time and serves them from
+  # the site itself: no third-party requests for readers (GDPR).
+  - privacy
