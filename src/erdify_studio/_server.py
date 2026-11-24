@@ -545,7 +545,8 @@ class _Handler(BaseHTTPRequestHandler):
         Closing a socket with unread data sends a TCP reset instead of a clean close;
         the client may then lose the error response (Windows aborts the read).
         """
-        if self._body_read or self.command not in ("PUT", "POST"):
+        # Any method can carry a body (e.g. a GET with Content-Length), not just PUT/POST.
+        if self._body_read:
             return
         self._body_read = True
         length = self.headers.get("Content-Length", "")

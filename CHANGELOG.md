@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs header logo uses the favicon, and the README wordmark is as tall as erdify's
   (147 px), so both READMEs show the icon and "erdify" at the same size.
 
+### Fixed
+
+- A refused request of any method with a body (e.g. a GET with a wrong token) closes
+  cleanly, so the client reads the 403 instead of a connection reset (seen on Windows).
+
 ## [0.1.1] - 2026-11-24
 
 ### Added

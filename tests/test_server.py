@@ -527,7 +527,9 @@ def test_post_svg_with_a_malformed_body_is_400(studio: Studio) -> None:
     assert status == 400
 
 
-@pytest.mark.parametrize(("method", "path"), [("PUT", "/api/layout"), ("POST", "/api/svg")])
+@pytest.mark.parametrize(
+    ("method", "path"), [("PUT", "/api/layout"), ("POST", "/api/svg"), ("GET", "/api/diagrams")]
+)
 def test_writes_from_a_foreign_host_are_refused(studio: Studio, method: str, path: str) -> None:
     status, _, _ = studio.request(method, path, b"{}", headers={"Host": "evil.example"})
     assert status == 403
@@ -564,7 +566,9 @@ def test_a_failed_export_after_save_is_a_warning(
     assert any("SVG export after save failed" in r.message for r in caplog.records)
 
 
-@pytest.mark.parametrize(("method", "path"), [("PUT", "/api/layout"), ("POST", "/api/svg")])
+@pytest.mark.parametrize(
+    ("method", "path"), [("PUT", "/api/layout"), ("POST", "/api/svg"), ("GET", "/api/diagrams")]
+)
 def test_a_refused_request_closes_cleanly(studio: Studio, method: str, path: str) -> None:
     """The unread body of a refused request must not turn the close into a reset
     (Windows then aborts the client before it reads the 403)."""
