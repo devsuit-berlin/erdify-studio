@@ -52,7 +52,7 @@ card**.
   <p align="center">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/devsuit-berlin/erdify-studio/main/docs/assets/erdify-studio-wordmark-dark.svg">
-      <img alt="erdify studio" src="https://raw.githubusercontent.com/devsuit-berlin/erdify-studio/main/docs/assets/erdify-studio-wordmark-light.svg" width="350">
+      <img alt="erdify studio" src="https://raw.githubusercontent.com/devsuit-berlin/erdify-studio/main/docs/assets/erdify-studio-wordmark-light.svg" width="441">
     </picture>
   </p>
   ```
