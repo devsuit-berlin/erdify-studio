@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import secrets
 import threading
 import time
@@ -57,6 +58,24 @@ _LOAD_ERRORS = (
 MAX_BODY = 10 * 1024 * 1024
 
 _TOKEN_HEADER = "X-Studio-Token"
+#: The page loads nothing but its own files. Styles allow inline: Nuxt UI injects its
+#: colour variables as <style> elements and Vue sets style attributes. ``data:``: Vite
+#: inlines small font subsets and an SVG image into the bundle. (The SVG download is
+#: a blob: link the page navigates to, which ``img-src`` doesn't govern.)
+_CSP = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:; font-src 'self' data:; connect-src 'self'; "
+    "object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+)
+#: The page URL's token in a logged request line (``GET /?token=… HTTP/1.1``).
+_TOKEN_PARAM = re.compile(r"([?&]token=)[^&\s]*")
+
+
+def _is_length(value: str) -> bool:
+    """A ``Content-Length`` value: ASCII digits only (``'²'.isdigit()`` is true too)."""
+    return value.isascii() and value.isdigit()
+
+
 # Explicit types: ``mimetypes`` reads the Windows registry, which may map ``.js`` to
 # ``text/plain``, and browsers refuse to run such a module script.
 _TYPES = {
@@ -104,14 +123,14 @@ class StudioServer(ThreadingHTTPServer):
         *,
         port: int,
         static_dir: Path,
-        shown_path: str,
+        display: Callable[[Path], str],
         min_interval: float = 1.0,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.load = load
         self._clock = clock
         self.static_dir = static_dir.resolve()
-        self.shown_path = shown_path
+        self.display = display
         self.token = secrets.token_urlsafe(32)
         self.save_lock = threading.Lock()
         self.min_interval = min_interval
@@ -204,7 +223,7 @@ def start_server(
     *,
     port: int = 0,
     static_dir: Path | None = None,
-    shown_path: str,
+    display: Callable[[Path], str],
     min_interval: float = 1.0,
     clock: Callable[[], float] = time.monotonic,
 ) -> StudioServer:
@@ -215,7 +234,8 @@ def start_server(
             here, then by the watcher while the server runs.
         port: The port; 0 picks a free one.
         static_dir: The built frontend to serve (default: ``STATIC_DIR``).
-        shown_path: The layout file's path as the UI shows it.
+        display: Turns the layout file's path into the text the UI shows; applied to
+            the current config on every request, so a changed ``layout`` setting shows.
         min_interval: Shortest time between two loads, in seconds.
         clock: Measures how long a load takes (injected by tests).
 
@@ -227,7 +247,7 @@ def start_server(
         load,
         port=port,
         static_dir=static_dir or STATIC_DIR,
-        shown_path=shown_path,
+        display=display,
         min_interval=min_interval,
         clock=clock,
     )
@@ -317,6 +337,7 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", _TYPES.get(file.suffix, "application/octet-stream"))
         self.send_header("Content-Length", str(len(body)))
         self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Content-Security-Policy", _CSP)
         self.end_headers()
         self.wfile.write(body)
 
@@ -350,7 +371,7 @@ class _Handler(BaseHTTPRequestHandler):
         try:
             snapshot = self.server.snapshot()
             project, config = snapshot.project, snapshot.config
-            diagrams = build_studio(project, config, shown_path=self.server.shown_path)
+            diagrams = build_studio(project, config, shown_path=self.server.display(config.layout))
         except _LOAD_ERRORS as e:
             self._error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
             return
@@ -381,6 +402,7 @@ class _Handler(BaseHTTPRequestHandler):
                 project, config = snapshot.project, snapshot.config
                 revision = save_diagrams(project, config, payload["diagrams"], payload["revision"])
                 exported = self._export(project, config)
+                shown = self.server.display(config.layout)
         except PositionsError as e:
             self._error(HTTPStatus.BAD_REQUEST, str(e))
         except LayoutConflictError as e:
@@ -390,9 +412,7 @@ class _Handler(BaseHTTPRequestHandler):
         except Exception:
             self._internal_error()
         else:
-            self._json(
-                HTTPStatus.OK, {"saved": self.server.shown_path, "revision": revision, **exported}
-            )
+            self._json(HTTPStatus.OK, {"saved": shown, "revision": revision, **exported})
 
     def _merge(self) -> None:
         """The diagrams of the current model with the page's on-screen positions."""
@@ -408,7 +428,7 @@ class _Handler(BaseHTTPRequestHandler):
                 snapshot.project,
                 snapshot.config,
                 payload["diagrams"],
-                shown_path=self.server.shown_path,
+                shown_path=self.server.display(snapshot.config.layout),
             )
         except PositionsError as e:
             self._error(HTTPStatus.BAD_REQUEST, str(e))
@@ -476,7 +496,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._error(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "expected application/json")
             return None
         length = self.headers.get("Content-Length")
-        if length is None or not length.isdigit():
+        if length is None or not _is_length(length):
             self._error(HTTPStatus.LENGTH_REQUIRED, "Content-Length required")
             return None
         if int(length) > MAX_BODY:
@@ -529,8 +549,9 @@ class _Handler(BaseHTTPRequestHandler):
             return
         self._body_read = True
         length = self.headers.get("Content-Length", "")
-        if length.isdigit() and int(length) <= MAX_BODY:
+        if _is_length(length) and int(length) <= MAX_BODY:
             self.rfile.read(int(length))
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 - stdlib name
-        logger.info(f"{self.address_string()} {format % args}")
+        line = _TOKEN_PARAM.sub(r"\1***", format % args)
+        logger.info(f"{self.address_string()} {line}")

@@ -20,6 +20,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dark mode) and shows the studio icon in the header. The diagram keeps its colours, so
   the canvas still matches the SVG export and exported SVGs don't change.
 
+### Fixed
+
+- A request with a non-ASCII `Content-Length` (e.g. `²`) gets a 411 instead of
+  crashing the request handler.
+- The layout path studio shows (the Save message, banners) follows a changed
+  `[tool.erdify-studio] layout` while studio runs, instead of the path at startup.
+- After Save, the layout file's revision is the one of what studio wrote: a change by
+  someone else right after the write is reported as a conflict on the next Save instead
+  of being overwritten.
+- A group whose SVG file collides with the entities without a group: the error names
+  the group to rename.
+
+### Security
+
+- The canvas page sends a `Content-Security-Policy` (own files only), and the access
+  log no longer contains the page URL's token.
+
 ## [0.1.0] - 2026-11-23
 
 ### Added

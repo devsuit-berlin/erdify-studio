@@ -24,6 +24,7 @@ from erdify_studio._layout import (
     DEFAULT_GROUP,
     OVERVIEW,
     Layout,
+    dumps_layout,
     load_existing_layout,
     save_layout,
 )
@@ -311,7 +312,9 @@ def save_diagrams(
     sizes, edges = place_inputs(project)
     result = place_layout(layout, contents, sizes=sizes, edges=edges)
     save_layout(result.layout, config.layout)
-    return layout_revision(config.layout)
+    # The revision of what was written, not of the file read again: a write by someone
+    # else in between must surface as a conflict on the next Save, not be adopted.
+    return hashlib.sha256(dumps_layout(result.layout).encode()).hexdigest()
 
 
 def checked_positions(positions: object, shown: frozenset[str]) -> dict[str, tuple[float, float]]:

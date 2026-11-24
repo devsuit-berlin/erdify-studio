@@ -95,6 +95,11 @@ def _loader(root: Path) -> Callable[[], tuple[erdify.Project, StudioConfig]]:
     return load
 
 
+def _relative(root: Path) -> Callable[[Path], str]:
+    """Show a layout path relative to the project, as the CLI does from its root."""
+    return lambda path: path.relative_to(root).as_posix()
+
+
 def _static(root: Path) -> Path:
     static = root / "static"
     (static / "assets").mkdir(parents=True)
@@ -109,7 +114,7 @@ def studio(tmp_path: Path) -> Iterator[Studio]:
     root = _project(tmp_path / "project")
     # No watcher ticks during a test: tests call `refresh()` themselves.
     server = start_server(
-        _loader(root), static_dir=_static(tmp_path), shown_path=SHOWN, min_interval=3600
+        _loader(root), static_dir=_static(tmp_path), display=_relative(root), min_interval=3600
     )
     thread = threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True)
     thread.start()
@@ -153,7 +158,7 @@ def test_url_carries_the_token(studio: Studio) -> None:
 
 
 def test_tokens_differ_per_server(studio: Studio, tmp_path: Path) -> None:
-    other = start_server(_loader(studio.root), static_dir=tmp_path, shown_path=SHOWN)
+    other = start_server(_loader(studio.root), static_dir=tmp_path, display=_relative(studio.root))
     other.server_close()
     assert other.token != studio.server.token
 
@@ -418,7 +423,7 @@ def exporting(tmp_path: Path) -> Iterator[Studio]:
     )
     # No watcher ticks during a test: tests call `refresh()` themselves.
     server = start_server(
-        _loader(root), static_dir=_static(tmp_path), shown_path=SHOWN, min_interval=3600
+        _loader(root), static_dir=_static(tmp_path), display=_relative(root), min_interval=3600
     )
     thread = threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True)
     thread.start()
@@ -674,7 +679,7 @@ def test_the_interval_is_at_least_twice_the_parse_time(tmp_path: Path) -> None:
         return load()
 
     server = start_server(
-        slow, static_dir=_static(tmp_path), shown_path=SHOWN, min_interval=0.01, clock=clock
+        slow, static_dir=_static(tmp_path), display=_relative(root), min_interval=0.01, clock=clock
     )
     try:
         server.refresh()
@@ -686,7 +691,7 @@ def test_the_interval_is_at_least_twice_the_parse_time(tmp_path: Path) -> None:
 def test_the_watcher_follows_the_files(tmp_path: Path) -> None:
     root = _project(tmp_path / "project")
     server = start_server(
-        _loader(root), static_dir=_static(tmp_path), shown_path=SHOWN, min_interval=0.05
+        _loader(root), static_dir=_static(tmp_path), display=_relative(root), min_interval=0.05
     )
     thread = threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True)
     thread.start()
@@ -786,3 +791,41 @@ def test_a_lasting_unexpected_error_is_logged_once(
         for _ in range(3):
             studio.server.refresh()
     assert sum("cannot load the project" in r.message for r in caplog.records) == 1
+
+
+# --- review follow-ups (#51) ------------------------------------------------------
+
+
+@pytest.mark.parametrize("length", ["²", "1²"])  # Latin-1 digits: isdigit() but not int()
+def test_a_non_ascii_content_length_is_refused(studio: Studio, length: str) -> None:
+    headers = {"Content-Type": "application/json", "Content-Length": length}
+    status, _, body = studio.request("PUT", "/api/layout", b"{}", headers=headers)
+    assert status == 411 and "Content-Length" in _json(body)["error"]
+
+
+def test_the_access_log_hides_the_token(studio: Studio, caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("INFO", logger="erdify_studio._server"):
+        status, _, _ = studio.request("GET", f"/?token={studio.server.token}", token=False)
+    assert status == 200
+    assert "GET /?token=" in caplog.text
+    assert studio.server.token not in caplog.text
+
+
+def test_the_page_declares_a_content_security_policy(studio: Studio) -> None:
+    status, headers, _ = studio.request("GET", "/", token=False)
+    policy = headers["Content-Security-Policy"]
+    assert status == 200
+    for directive in ("default-src 'self'", "script-src 'self'", "frame-ancestors 'none'"):
+        assert directive in policy
+    assert "unsafe-eval" not in policy and "http" not in policy
+
+
+def test_the_shown_layout_path_follows_the_config(studio: Studio) -> None:
+    pyproject = studio.root / "pyproject.toml"
+    setting = '\n[tool.erdify-studio]\nlayout = "docs/erd.json"\n'
+    pyproject.write_text(pyproject.read_text() + setting)
+    studio.server.refresh()
+    assert _payload(studio)["layoutPath"] == "docs/erd.json"
+    status, _, body = studio.put_layout({"revision": None, "diagrams": _diagrams(studio)})
+    assert status == 200 and _json(body)["saved"] == "docs/erd.json"
+    assert (studio.root / "docs" / "erd.json").is_file()
