@@ -125,8 +125,6 @@ class _NewOnly(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         message = record.getMessage()
         with self._lock:
-            if message in self._current:
-                return False
             self._current.add(message)
             return message not in self._previous
 
