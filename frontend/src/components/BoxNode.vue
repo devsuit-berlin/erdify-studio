@@ -109,13 +109,13 @@ function baseline(top: number, height: number): number {
   cursor: grabbing;
 }
 .box__body {
-  fill: var(--ui-bg);
+  fill: var(--erd-box-bg);
 }
 .box__header {
-  fill: var(--ui-bg-accented);
+  fill: var(--erd-header);
 }
 .box--enum .box__header {
-  fill: color-mix(in oklab, var(--erd-primary) 22%, var(--ui-bg));
+  fill: var(--erd-enum-header);
 }
 .box__frame {
   fill: none;
@@ -149,7 +149,12 @@ function baseline(top: number, height: number): number {
 .box__divider {
   stroke: var(--ui-border);
 }
-.box__title,
+.box__title {
+  fill: var(--erd-header-text);
+}
+.box--enum .box__title {
+  fill: var(--erd-enum-title);
+}
 .box__name {
   fill: var(--ui-text-highlighted);
 }

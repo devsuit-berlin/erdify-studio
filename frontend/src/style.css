@@ -30,7 +30,23 @@
    primary is. Dark mode: indigo-400, as the canvas had before. */
 :root {
   --erd-primary: oklch(58.5% 0.233 277.117);
+  --erd-header: var(--ui-bg-accented);
+  --erd-header-text: var(--ui-text-highlighted);
+  --erd-box-bg: var(--ui-bg);
+  --erd-enum-header: color-mix(in oklab, var(--erd-primary) 22%, var(--ui-bg));
+  --erd-enum-title: var(--ui-text-highlighted);
 }
 .dark {
   --erd-primary: oklch(67.3% 0.182 276.935);
+}
+
+/* Light mode only: the colours from [tool.erdify-studio.colors] (set as --brand-*
+   on the canvas root). Dark mode keeps the Nuxt UI tokens above. */
+html:not(.dark) .erd-diagram {
+  --erd-primary: var(--brand-accent);
+  --erd-header: var(--brand-header);
+  --erd-header-text: var(--brand-header-text);
+  --erd-box-bg: var(--brand-background);
+  --erd-enum-header: var(--brand-enum-header);
+  --erd-enum-title: var(--brand-enum-title);
 }
