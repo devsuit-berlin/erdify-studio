@@ -35,8 +35,9 @@ jobs:
 
   deploy:
     name: Deploy to GitHub Pages
-    # GitHub Pages needs a public repository on the Free plan: until then the site is
-    # only built (and checked); the deploy starts once the repository is public.
+    # Served at https://erdify-studio.devsuit.io/ (custom domain set in the repo's Pages
+    # settings; docs/CNAME records it, as in erdify). GitHub Pages needs a public
+    # repository on the Free plan, so a private fork only builds the site.
     if: github.event_name == 'push' && !github.event.repository.private
     needs: build
     runs-on: ubuntu-latest
