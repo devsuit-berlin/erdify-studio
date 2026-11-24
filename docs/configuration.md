@@ -27,6 +27,8 @@ erdify's own settings (`[tool.erdify]`: `include`, `sources`, `exclude`, `strict
 
 ## Diagram colours
 
+For example, the devsuit brand (see [Brand](brand.md#colours)):
+
 ```toml
 [tool.erdify-studio.colors]
 accent = "#4150aa"

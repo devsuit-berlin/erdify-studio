@@ -36,12 +36,12 @@ import erdify
 from erdify import Project
 
 from erdify_studio._config import StudioConfig
+from erdify_studio._config import logger as config_logger
 from erdify_studio._diagrams import layout_revision, model_fingerprint, save_diagrams
 from erdify_studio._errors import LayoutConflictError, PositionsError, StudioError
 from erdify_studio._export import build_studio, export_project, merge_studio, render_download
 
 logger = logging.getLogger(__name__)
-config_logger = logging.getLogger("erdify_studio._config")
 
 #: The built frontend shipped in the package.
 STATIC_DIR = Path(__file__).parent / "_static"
@@ -105,21 +105,30 @@ class Snapshot:
     error: str | None = None
 
 
-class _Once(logging.Filter):
-    """Passes each distinct log message once: the watcher reloads the config every tick."""
+class _NewOnly(logging.Filter):
+    """Passes a message only if the previous load didn't log it.
+
+    The watcher reloads the config every tick: a warning that stays is logged once,
+    one that goes away and comes back is logged again. ``new_load`` starts a load.
+    """
 
     def __init__(self) -> None:
         super().__init__()
-        self._seen: set[str] = set()
+        self._previous: set[str] = set()
+        self._current: set[str] = set()
         self._lock = threading.Lock()
+
+    def new_load(self) -> None:
+        with self._lock:
+            self._previous, self._current = self._current, set()
 
     def filter(self, record: logging.LogRecord) -> bool:
         message = record.getMessage()
         with self._lock:
-            if message in self._seen:
+            if message in self._current:
                 return False
-            self._seen.add(message)
-            return True
+            self._current.add(message)
+            return message not in self._previous
 
 
 class StudioServer(ThreadingHTTPServer):
@@ -157,9 +166,9 @@ class StudioServer(ThreadingHTTPServer):
         self._snapshot_lock = threading.Lock()
         self._stop = threading.Event()
         self._watcher: threading.Thread | None = None
-        # Config warnings once per distinct message while the server lives, not per tick.
-        self._config_once = _Once()
-        config_logger.addFilter(self._config_once)
+        # Config warnings once while they last, not on every watcher tick.
+        self._config_filter = _NewOnly()
+        config_logger.addFilter(self._config_filter)
         try:
             started = clock()
             project, config = load()  # the first load must succeed, as `check` would
@@ -167,7 +176,7 @@ class StudioServer(ThreadingHTTPServer):
             self._load_seconds = clock() - started
             super().__init__(("127.0.0.1", port), _Handler)
         except BaseException:
-            config_logger.removeFilter(self._config_once)
+            config_logger.removeFilter(self._config_filter)
             raise
 
     @property
@@ -193,6 +202,7 @@ class StudioServer(ThreadingHTTPServer):
         """Load the project once; on failure keep the last good one and record why."""
         started = self._clock()
         try:
+            self._config_filter.new_load()
             project, config = self.load()
             fingerprint = model_fingerprint(project, config)
         except _LOAD_ERRORS as e:
@@ -221,7 +231,7 @@ class StudioServer(ThreadingHTTPServer):
 
     def server_close(self) -> None:
         self._stop_watcher()
-        config_logger.removeFilter(self._config_once)
+        config_logger.removeFilter(self._config_filter)
         super().server_close()
 
     def _watch(self) -> None:

@@ -154,11 +154,17 @@ def test_config_warnings_are_logged_once_while_serving(
         server.refresh()
         server.refresh()
         assert len(_config_warnings(caplog)) == 2
+        # Fixed, then broken again in the same session: warned again.
+        pyproject.write_text(base + '[tool.erdify-studio.colors]\nbackground = "#fdf6e3"\n')
+        server.refresh()
+        pyproject.write_text(base + '[tool.erdify-studio.colors]\nbackground = "#1e2129"\n')
+        server.refresh()
+        assert len(_config_warnings(caplog)) == 3
     finally:
         server.server_close()
     # Closed: the filter is gone, a plain load warns again.
     _loader(root)()
-    assert len(_config_warnings(caplog)) == 3
+    assert len(_config_warnings(caplog)) == 4
 
 
 def _json(body: bytes) -> Any:
