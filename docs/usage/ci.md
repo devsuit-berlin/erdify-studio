@@ -42,7 +42,7 @@ With [pre-commit](https://pre-commit.com):
 ```yaml
 repos:
   - repo: https://github.com/devsuit-berlin/erdify-studio
-    rev: v0.1.0
+    rev: v0.1.1
     hooks:
       - id: erdify-studio-check
         args: [./src]                               # optional, default: .
