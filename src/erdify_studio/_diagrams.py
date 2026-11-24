@@ -17,7 +17,7 @@ from typing import Literal, TypedDict
 from erdify import EdgeEnd, Project, diagram_edges
 
 from erdify_studio._check import DiagramContent, drawn_enums, project_diagrams
-from erdify_studio._colors import palette_of
+from erdify_studio._colors import Palette, palette_of, set_colors
 from erdify_studio._config import StudioConfig
 from erdify_studio._entities import entity_groups, entity_ids, entity_keys, enum_key
 from erdify_studio._errors import LayoutConflictError, LayoutError, PositionsError
@@ -155,6 +155,8 @@ class Diagrams(TypedDict):
     layoutPath: str
     projectPath: str
     exportPath: str | None
+    #: The keys set in ``[tool.erdify-studio.colors]`` (the colour panel starts from them).
+    colorConfig: dict[str, str]
 
 
 #: Labels of the diagrams that aren't named after a group.
@@ -222,10 +224,29 @@ def model_fingerprint(project: Project, config: StudioConfig) -> str:
             for d in payload["diagrams"]
         ],
         "colors": payload["colors"],
+        "colorConfig": payload["colorConfig"],
         "exportDir": None if config.export_dir is None else str(config.export_dir),
     }
     text = json.dumps(shape, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(text.encode()).hexdigest()
+
+
+def colors_json(palette: Palette) -> ColorsJson:
+    """The colours the canvas draws with, as the API sends them."""
+    return {
+        "accent": palette.accent,
+        "header": palette.header,
+        "headerText": palette.header_text,
+        "background": palette.background,
+        "enumHeader": palette.enum_header,
+        "enumTitle": palette.enum_title,
+        "text": palette.text,
+        "textMuted": palette.text_muted,
+        "border": palette.border,
+        "borderStrong": palette.border_strong,
+        "backgroundMuted": palette.background_muted,
+        "accentText": palette.accent_text,
+    }
 
 
 def build_from(project: Project, config: StudioConfig, start: Layout, *, created: bool) -> Diagrams:
@@ -275,20 +296,8 @@ def build_from(project: Project, config: StudioConfig, start: Layout, *, created
         "metrics": dict(METRICS),
         "boxes": _boxes(project, config, sizes, contents[OVERVIEW]),
         "diagrams": diagrams,
-        "colors": {
-            "accent": palette.accent,
-            "header": palette.header,
-            "headerText": palette.header_text,
-            "background": palette.background,
-            "enumHeader": palette.enum_header,
-            "enumTitle": palette.enum_title,
-            "text": palette.text,
-            "textMuted": palette.text_muted,
-            "border": palette.border,
-            "borderStrong": palette.border_strong,
-            "backgroundMuted": palette.background_muted,
-            "accentText": palette.accent_text,
-        },
+        "colors": colors_json(palette),
+        "colorConfig": set_colors(config.colors),
         "revision": None,
         "pending": _pending(result),
         "layoutPath": "",

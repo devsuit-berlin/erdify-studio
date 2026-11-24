@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import tomllib
 
 import pytest
 
@@ -11,11 +12,13 @@ from erdify_studio._colors import (
     HEX,
     DiagramColors,
     Palette,
+    colors_toml,
     contrast,
     mix_oklab,
     palette_of,
     readable_text,
     resolve_palette,
+    set_colors,
 )
 from erdify_studio._errors import ConfigError
 
@@ -129,3 +132,21 @@ def test_accent_text_follows_the_accent() -> None:
 def test_diagram_colors_validate_every_field(field: str) -> None:
     with pytest.raises(ConfigError, match=field):
         DiagramColors(**{field: "red"})
+
+
+def test_colors_toml() -> None:
+    assert colors_toml(DiagramColors()) == "[tool.erdify-studio.colors]\n"
+    assert colors_toml(DiagramColors(background="#fdf6e3", accent="#4150aa")) == (
+        '[tool.erdify-studio.colors]\naccent = "#4150aa"\nbackground = "#fdf6e3"\n'
+    )
+
+
+def test_colors_toml_round_trips() -> None:
+    colors = DiagramColors(accent="#4150aa", text="#111111")
+    table = tomllib.loads(colors_toml(colors))["tool"]["erdify-studio"]["colors"]
+    assert table == set_colors(colors)
+
+
+def test_set_colors() -> None:
+    assert set_colors(DiagramColors(border="#333333")) == {"border": "#333333"}
+    assert set_colors(DiagramColors()) == {}

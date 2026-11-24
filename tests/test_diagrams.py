@@ -806,3 +806,18 @@ def test_fingerprint_changes_with_the_colors(tmp_path: Path) -> None:
     project, config = _load(_project(tmp_path))
     recolored = dataclasses.replace(config, colors=DiagramColors(accent="#4150aa"))
     assert model_fingerprint(project, config) != model_fingerprint(project, recolored)
+
+
+def test_payload_carries_the_color_config(tmp_path: Path) -> None:
+    project, config = _load(_project(tmp_path))
+    assert build_diagrams(project, config, shown_path="x")["colorConfig"] == {}
+    recolored = dataclasses.replace(config, colors=DiagramColors(accent="#4150aa"))
+    assert build_diagrams(project, recolored, shown_path="x")["colorConfig"] == {
+        "accent": "#4150aa"
+    }
+
+
+def test_fingerprint_follows_the_color_config(tmp_path: Path) -> None:
+    project, config = _load(_project(tmp_path))
+    explicit = dataclasses.replace(config, colors=DiagramColors(accent="#615fff"))
+    assert model_fingerprint(project, config) != model_fingerprint(project, explicit)
