@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineProps<{ title: string; dirty: boolean; saveable: boolean; saving: boolean; downloading: boolean }>();
-defineEmits<{ save: []; download: [] }>();
+defineEmits<{ save: []; download: []; colours: [] }>();
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 </script>
@@ -12,6 +12,13 @@ const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
     <UBadge v-if="dirty" color="warning" variant="subtle" icon="i-lucide-circle-dot" label="Unsaved changes" />
     <UButton
       class="ml-auto"
+      icon="i-lucide-palette"
+      label="Colours"
+      color="neutral"
+      variant="outline"
+      @click="$emit('colours')"
+    />
+    <UButton
       icon="i-lucide-download"
       label="Download SVG"
       color="neutral"
