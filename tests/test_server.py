@@ -167,6 +167,31 @@ def test_config_warnings_are_logged_once_while_serving(
     assert len(_config_warnings(caplog)) == 4
 
 
+def test_a_failed_load_does_not_repeat_config_warnings(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    root = _project(tmp_path / "project")
+    pyproject = root / "pyproject.toml"
+    pyproject.write_text(
+        pyproject.read_text() + '[tool.erdify-studio.colors]\nbackground = "#1e2129"\n'
+    )
+    caplog.set_level(logging.WARNING, logger="erdify_studio._config")
+    server = start_server(
+        _loader(root), static_dir=_static(tmp_path), display=_relative(root), min_interval=3600
+    )
+    try:
+        models = root / "shop" / "models.py"
+        good = models.read_text()
+        models.write_text(good + "\nclass Broken(\n")  # a half-typed model file
+        server.refresh()
+        assert server.snapshot().error is not None
+        models.write_text(good)
+        server.refresh()
+        assert len(_config_warnings(caplog)) == 1
+    finally:
+        server.server_close()
+
+
 def _json(body: bytes) -> Any:
     return json.loads(body)
 

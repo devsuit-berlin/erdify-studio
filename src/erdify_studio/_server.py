@@ -106,10 +106,11 @@ class Snapshot:
 
 
 class _NewOnly(logging.Filter):
-    """Passes a message only if the previous load didn't log it.
+    """Passes a message only if the last successful load didn't log it.
 
     The watcher reloads the config every tick: a warning that stays is logged once,
-    one that goes away and comes back is logged again. ``new_load`` starts a load.
+    one that goes away and comes back is logged again. ``new_load`` starts a load,
+    ``commit`` ends a successful one; a failed load leaves the memory as it was.
     """
 
     def __init__(self) -> None:
@@ -120,7 +121,11 @@ class _NewOnly(logging.Filter):
 
     def new_load(self) -> None:
         with self._lock:
-            self._previous, self._current = self._current, set()
+            self._current = set()
+
+    def commit(self) -> None:
+        with self._lock:
+            self._previous = self._current
 
     def filter(self, record: logging.LogRecord) -> bool:
         message = record.getMessage()
@@ -170,6 +175,7 @@ class StudioServer(ThreadingHTTPServer):
         try:
             started = clock()
             project, config = load()  # the first load must succeed, as `check` would
+            self._config_filter.commit()
             self._snapshot = Snapshot(project, config, model_fingerprint(project, config))
             self._load_seconds = clock() - started
             super().__init__(("127.0.0.1", port), _Handler)
@@ -210,6 +216,7 @@ class StudioServer(ThreadingHTTPServer):
             if self._fail("internal error (see the terminal)"):
                 logger.exception("cannot load the project, showing the last good state")
         else:
+            self._config_filter.commit()
             with self._snapshot_lock:
                 self._snapshot = Snapshot(project, config, fingerprint)
         finally:

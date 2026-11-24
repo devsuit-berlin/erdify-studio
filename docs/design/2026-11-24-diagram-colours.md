@@ -122,6 +122,12 @@ background = "#ffffff"   # box bodies and the SVG background
   of reading module constants. `check` needs no change: it compares against what the
   export renders, which now follows the config.
 
+- `_server.py`: the watcher reloads the config about every second, so the server puts a
+  filter on `_config`'s logger while it runs: a config warning (dark `background`,
+  unknown keys) is logged when it appears, not on every tick, and again if it goes away
+  and comes back; a failed load doesn't reset it. `open` uses the server's first load as
+  its pre-flight check, so a warning appears once at startup. *(Added in review.)*
+
 ### Canvas
 
 - `GET /api/diagrams` gains `colors`: the resolved light palette as hex (all values the

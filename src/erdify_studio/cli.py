@@ -242,11 +242,17 @@ def _open(path: Path, *, port: int, browser: bool) -> int:
             file=sys.stderr,
         )
         return EXIT_ERROR
-    project, config = _load(path)
-    shown = _display(config.layout)
-    # Fail before serving, like `check`: no entities, an unreadable layout file.
-    build_diagrams(project, config, shown_path=shown)
+    # The server's first load is the only one at startup, so config warnings appear once.
     server = _server.start_server(lambda: _load(path), port=port, display=_display)
+    try:
+        # Fail before serving, like `check`: no entities, an unreadable layout file.
+        snapshot = server.snapshot()
+        build_diagrams(
+            snapshot.project, snapshot.config, shown_path=_display(snapshot.config.layout)
+        )
+    except BaseException:
+        server.server_close()
+        raise
     try:
         print(f"erdify-studio: serving {server.url} (Ctrl+C to stop)", flush=True)
         if browser:
