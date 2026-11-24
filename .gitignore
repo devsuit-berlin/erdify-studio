@@ -19,3 +19,4 @@ src/erdify_studio/_static/
 .mcp.json
 CLAUDE.local.md
 site/
+.cache/
