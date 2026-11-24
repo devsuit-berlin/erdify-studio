@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Colours panel: a half-typed colour no longer holds back the preview of the other
+  rows, the row marked invalid is always the one the server rejected, "Header text"
+  says "automatic" while it follows the header, unset rows are greyed, and the
+  dark-mode note follows a theme switch while the panel is open (#78).
+
 ## [0.2.0] - 2026-11-24
 
 ### Added

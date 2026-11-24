@@ -229,6 +229,16 @@ export async function saveLayout(
   return { ok: false, conflict: response.status === 409, reason, message };
 }
 
+/** A refused colour preview; `key` names the colour the server rejected, if one. */
+export class ColorPreviewError extends Error {
+  constructor(
+    message: string,
+    readonly key?: ColorKey,
+  ) {
+    super(message);
+  }
+}
+
 /** The palette and the TOML text for the colour panel's keys (null: the default). Writes nothing. */
 export async function previewColors(
   colors: Partial<Record<ColorKey, string | null>>,
@@ -239,7 +249,13 @@ export async function previewColors(
     body: JSON.stringify({ colors }),
   });
   if (!response.ok) {
-    throw new Error(await errorMessage(response));
+    let body: { error?: string; key?: ColorKey } = {};
+    try {
+      body = (await response.json()) as typeof body;
+    } catch {
+      // not JSON: report the status
+    }
+    throw new ColorPreviewError(body.error ?? `HTTP ${response.status}`, body.key);
   }
   return (await response.json()) as { colors: ColorsJson; toml: string };
 }
