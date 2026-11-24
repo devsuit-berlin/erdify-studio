@@ -23,13 +23,14 @@ from mkdocs.utils import get_relative_url
 
 log = logging.getLogger(f"mkdocs.hooks.{__name__}")
 
-# Attribute values in the rendered HTML; code blocks are escaped (&quot;), so they don't
-# match. The lookbehind keeps `data-src=` and the like out.
-_ATTR = re.compile(r'(?<![\w-])(?P<attr>src|srcset)="(?P<value>[^"]+)"')
+# Attribute values in the rendered HTML, in single or double quotes; code blocks are
+# escaped (&quot;), so they don't match. The lookbehind keeps `data-src=` and the like out.
+_ATTR = re.compile(r'(?<![\w-])(?P<attr>src|srcset)=(?P<q>["\'])(?P<value>.+?)(?P=q)')
+_SCHEME = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")  # https:, data:, mailto:, ...
 
 
 def _is_relative(url: str) -> bool:
-    return not (url.startswith(("/", "#", "data:", "mailto:")) or "://" in url)
+    return not (url.startswith(("/", "#")) or _SCHEME.match(url))
 
 
 def _file(base: str, path: str, files: Files) -> File | None:
@@ -58,7 +59,10 @@ def _resolve_srcset(value: str, page: Page, files: Files) -> str:
     # "a.svg, b.svg 2x": each candidate is a URL plus an optional descriptor.
     candidates = []
     for candidate in value.split(","):
-        url, *descriptor = candidate.split(None, 1)  # any whitespace before "2x"
+        parts = candidate.split(None, 1)  # any whitespace before "2x"
+        if not parts:
+            continue  # "a.svg, " or "a.svg,,b.svg"
+        url, *descriptor = parts
         candidates.append(" ".join([_resolve(url, page, files), *descriptor]))
     return ", ".join(candidates)
 
@@ -70,6 +74,6 @@ def on_page_content(html: str, *, page: Page, config: Any, files: Files) -> str:
             new = _resolve_srcset(value, page, files)
         else:
             new = _resolve(value, page, files)
-        return f'{match["attr"]}="{new}"'
+        return f"{match['attr']}={match['q']}{new}{match['q']}"
 
     return _ATTR.sub(rewrite, html)

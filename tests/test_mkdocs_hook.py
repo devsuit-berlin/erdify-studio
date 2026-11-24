@@ -61,6 +61,8 @@ def _render(html: str, page_path: str = "brand.md") -> Any:
             '<source srcset="../assets/x.svg, ../assets/x.svg 2x">',
         ),
         ('<source srcset="assets/x.svg\t2x">', '<source srcset="../assets/x.svg 2x">'),
+        ('<source srcset="assets/x.svg, ">', '<source srcset="../assets/x.svg">'),
+        ("<img src='assets/x.svg'>", "<img src='../assets/x.svg'>"),
     ],
 )
 def test_resolves_relative_urls_for_the_page_url(html: str, expected: str) -> None:
@@ -73,6 +75,7 @@ def test_resolves_relative_urls_for_the_page_url(html: str, expected: str) -> No
         '<img src="https://example.com/a.svg">',
         '<img src="/assets/x.svg">',
         '<img src="#top">',
+        '<img src="tel:+49123">',
         '<img data-src="assets/x.svg">',
         '<source srcset="data:image/svg+xml,a,b">',
         "<code>src=&quot;assets/x.svg&quot;</code>",  # escaped in a code block
