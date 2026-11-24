@@ -8,17 +8,17 @@ card**.
 
 | Asset | File | Use |
 | --- | --- | --- |
-| Icon | `docs/assets/erdify-studio-icon.svg` (`-512.png`, `-1024.png`) | Avatars, app icons, the docs header, square spaces |
+| Icon | `docs/assets/erdify-studio-icon.svg` (`-512.png`, `-1024.png`) | Avatars, app icons, square spaces from 48 px |
 | Wordmark, light | `docs/assets/erdify-studio-wordmark-light.svg` (`.png`) | On white or light backgrounds |
 | Wordmark, dark | `docs/assets/erdify-studio-wordmark-dark.svg` (`.png`) | On dark backgrounds |
-| Favicon | `docs/assets/erdify-studio-favicon.svg` (source), `docs/assets/favicon.png` (64 px), `frontend/public/favicon.svg` | Browser tabs, the studio toolbar, anything below 48 px |
+| Favicon | `docs/assets/erdify-studio-favicon.svg` (source), `docs/assets/favicon.png` (64 px), `frontend/public/favicon.svg` | Browser tabs, the docs header, the studio toolbar, anything below 48 px |
 
 <p align="center">
   <img alt="erdify-studio icon" src="assets/erdify-studio-icon.svg" width="160">
   &nbsp;&nbsp;
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/erdify-studio-wordmark-dark.svg">
-    <img alt="erdify-studio wordmark" src="assets/erdify-studio-wordmark-light.svg" width="440">
+    <img alt="erdify-studio wordmark" src="assets/erdify-studio-wordmark-light.svg" width="320">
   </picture>
 </p>
 
@@ -52,7 +52,7 @@ card**.
   <p align="center">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/devsuit-berlin/erdify-studio/main/docs/assets/erdify-studio-wordmark-dark.svg">
-      <img alt="erdify studio" src="https://raw.githubusercontent.com/devsuit-berlin/erdify-studio/main/docs/assets/erdify-studio-wordmark-light.svg" width="480">
+      <img alt="erdify studio" src="https://raw.githubusercontent.com/devsuit-berlin/erdify-studio/main/docs/assets/erdify-studio-wordmark-light.svg" width="350">
     </picture>
   </p>
   ```

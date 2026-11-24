@@ -14,7 +14,7 @@ exclude_docs: |
 
 theme:
   name: material
-  logo: assets/erdify-studio-icon.svg
+  logo: assets/erdify-studio-favicon.svg
   favicon: assets/favicon.png
   palette:
     - media: "(prefers-color-scheme: light)"
