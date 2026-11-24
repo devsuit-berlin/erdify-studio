@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.1] - 2026-11-24
 
+### Changed
+
+- The README (also the PyPI page) and every docs page show the 0.2.0 features: diagram
+  colours, the Colours panel and Download SVG (#76).
+
 ### Fixed
 
 - Colours panel: a half-typed colour no longer holds back the preview of the other
