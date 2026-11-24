@@ -41,7 +41,7 @@ _BORDER_ACCENTED = "#cad5e2"  # --ui-border-accented (slate-300)
 _TEXT_HIGHLIGHTED = "#0f172b"  # --ui-text-highlighted (slate-900)
 _TEXT_MUTED = "#62748e"  # --ui-text-muted (slate-500)
 _PRIMARY = "#615fff"  # --erd-primary (indigo-500)
-_ENUM_HEADER = "#d8deff"  # color-mix(in oklab, --ui-primary 22%, --ui-bg)
+_ENUM_HEADER = "#d8deff"  # color-mix(in oklab, --erd-primary 22%, --ui-bg)
 
 #: The canvas font; the box widths assume its advance of 0.6 em (FONT_ADVANCE).
 _FONT_FAMILY = '"JetBrains Mono", ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace'
