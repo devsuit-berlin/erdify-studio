@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Configurable diagram colours: `[tool.erdify-studio.colors]` (`accent`, `header`,
+  `header_text`, `background`, all optional `#rrggbb`) colours the canvas (light mode),
+  the exported SVGs and Download SVG. Enum boxes derive from them, a too-dark
+  `background` logs a warning, and changing colours makes committed SVGs outdated until
+  the next `export` or Save (#48).
+
 ### Fixed
 
 - Docs site: the icon and wordmark on the Brand page load again. A docs hook
