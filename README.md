@@ -72,7 +72,7 @@ Keep the layout in sync on every commit with [pre-commit](https://pre-commit.com
 ```yaml
 repos:
   - repo: https://github.com/devsuit-berlin/erdify-studio
-    rev: v0.2.0
+    rev: v0.2.1
     hooks:
       - id: erdify-studio-check
         args: [./src]                               # optional, default: .

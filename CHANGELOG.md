@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-24
+
 ### Fixed
 
 - Colours panel: a half-typed colour no longer holds back the preview of the other
@@ -177,7 +179,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   next to the `pyproject.toml` erdify resolves, else the working directory),
   `group_by` (`auto` | `schema` | `app` | `module` | `none`) and `export_dir`.
 
-[Unreleased]: https://github.com/devsuit-berlin/erdify-studio/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/devsuit-berlin/erdify-studio/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/devsuit-berlin/erdify-studio/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/devsuit-berlin/erdify-studio/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/devsuit-berlin/erdify-studio/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/devsuit-berlin/erdify-studio/compare/v0.1.0...v0.1.1
