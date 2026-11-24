@@ -10,8 +10,10 @@ import pytest
 from erdify_studio._colors import (
     DEFAULT_PALETTE,
     HEX,
+    ColorError,
     DiagramColors,
     Palette,
+    color_value,
     colors_toml,
     contrast,
     mix_oklab,
@@ -150,3 +152,17 @@ def test_colors_toml_round_trips() -> None:
 def test_set_colors() -> None:
     assert set_colors(DiagramColors(border="#333333")) == {"border": "#333333"}
     assert set_colors(DiagramColors()) == {}
+
+
+def test_color_value_lowercases() -> None:
+    assert color_value("accent", "#ABCDEF") == "#abcdef"
+
+
+@pytest.mark.parametrize("value", ["red", "#fff", 1, None, "#ffffff\n"])
+def test_color_value_names_the_key(value: object) -> None:
+    with pytest.raises(ColorError) as caught:
+        color_value("accent", value)
+    assert caught.value.key == "accent"
+    assert "'accent'" in str(caught.value)
+    assert repr(value) in str(caught.value)
+    assert isinstance(caught.value, ConfigError)

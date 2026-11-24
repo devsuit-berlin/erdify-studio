@@ -35,7 +35,13 @@ from urllib.parse import unquote
 import erdify
 from erdify import Project
 
-from erdify_studio._colors import HEX, DiagramColors, colors_toml, palette_of
+from erdify_studio._colors import (
+    ColorError,
+    DiagramColors,
+    color_value,
+    colors_toml,
+    palette_of,
+)
 from erdify_studio._config import StudioConfig
 from erdify_studio._config import logger as config_logger
 from erdify_studio._diagrams import (
@@ -523,24 +529,23 @@ class _Handler(BaseHTTPRequestHandler):
             self._error(HTTPStatus.BAD_REQUEST, 'expected {"colors": {key: "#rrggbb" or null}}')
             return
         keys = {f.name for f in fields(DiagramColors)}
-        values: dict[str, str] = {}
-        for key, value in raw.items():
-            if key not in keys:
-                self._error(HTTPStatus.BAD_REQUEST, f"unknown colour key {key!r}")
-                return
-            if value is None:
-                continue
-            if not isinstance(value, str) or not HEX.fullmatch(value):
-                self._error(
-                    HTTPStatus.BAD_REQUEST, f'{key!r} must be a "#rrggbb" colour, got {value!r}'
-                )
-                return
-            values[key] = value.lower()
-        colors = DiagramColors(**values)
-        self._json(
-            HTTPStatus.OK,
-            {"colors": colors_json(palette_of(colors)), "toml": colors_toml(colors)},
-        )
+        unknown = sorted(set(raw) - keys)
+        if unknown:
+            self._error(
+                HTTPStatus.BAD_REQUEST, f"unknown colour key {unknown[0]!r}", key=unknown[0]
+            )
+            return
+        try:
+            colors = DiagramColors(
+                **{k: color_value(k, v) for k, v in raw.items() if v is not None}
+            )
+            result = {"colors": colors_json(palette_of(colors)), "toml": colors_toml(colors)}
+        except ColorError as e:
+            self._error(HTTPStatus.BAD_REQUEST, str(e), key=e.key)
+        except Exception:
+            self._internal_error()
+        else:
+            self._json(HTTPStatus.OK, result)
 
     def _svg(self) -> None:
         """One diagram as SVG with the positions the page shows, as a download."""
@@ -634,13 +639,25 @@ class _Handler(BaseHTTPRequestHandler):
         logger.exception(f"internal error handling {self.command} {self.path.split('?')[0]}")
         self._error(HTTPStatus.INTERNAL_SERVER_ERROR, "internal error (see the terminal)")
 
-    def _error(self, status: HTTPStatus, message: str, *, reason: str | None = None) -> None:
+    def _error(
+        self,
+        status: HTTPStatus,
+        message: str,
+        *,
+        reason: str | None = None,
+        key: str | None = None,
+    ) -> None:
+        """An error response: ``reason`` (a 409's cause) and ``key`` (the colour a 400 is
+        about) are added when given."""
         # The body of a refused request may be unread: don't reuse the connection.
         self.close_connection = True
         self._drain()
-        self._json(
-            status, {"error": message} if reason is None else {"error": message, "reason": reason}
-        )
+        body = {"error": message}
+        if reason is not None:
+            body["reason"] = reason
+        if key is not None:
+            body["key"] = key
+        self._json(status, body)
 
     def _drain(self) -> None:
         """Read the unread body of a request we refuse, up to ``MAX_BODY``.

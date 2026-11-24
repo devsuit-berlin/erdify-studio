@@ -2,9 +2,9 @@
 // The colour panel (#68): try diagram colours on the canvas without writing anything,
 // then copy them as the [tool.erdify-studio.colors] table. The server resolves the
 // palette and formats the TOML (POST /api/colors); this component only holds the edits.
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
-import { previewColors, type ColorConfig, type ColorKey, type ColorsJson } from "../api";
+import { ColorPreviewError, previewColors, type ColorConfig, type ColorKey, type ColorsJson } from "../api";
 
 const props = defineProps<{ open: boolean; config: ColorConfig; resolved: ColorsJson }>();
 const emit = defineEmits<{ "update:open": [boolean]; preview: [ColorsJson | null] }>();
@@ -50,12 +50,23 @@ const HEX = /^#[0-9a-fA-F]{6}$/;
 const edits = ref<Partial<Record<ColorKey, string | null>>>({});
 // The last good response: the colours shown and the TOML to copy.
 const last = ref<{ colors: ColorsJson; toml: string } | null>(null);
-const invalid = ref<Partial<Record<ColorKey, string>>>({});
+// The key the server rejected (its message); malformed edits are marked locally below.
+const rejected = ref<Partial<Record<ColorKey, string>>>({});
 // An error that names no key (e.g. the server is gone).
 const failure = ref<string | null>(null);
-const isDark = ref(false);
+const isDark = ref(document.documentElement.classList.contains("dark"));
 
 const changed = computed(() => Object.keys(edits.value).length > 0);
+// Edits that aren't #rrggbb yet (half-typed): kept out of the preview, so the other rows
+// keep previewing, and marked here.
+const malformed = computed(() => {
+  const marks: Partial<Record<ColorKey, string>> = {};
+  for (const [key, edit] of Object.entries(edits.value) as [ColorKey, string | null][]) {
+    if (typeof edit === "string" && !HEX.test(edit)) marks[key] = `'${key}' must be a "#rrggbb" colour`;
+  }
+  return marks;
+});
+const invalid = computed(() => ({ ...rejected.value, ...malformed.value }));
 const shown = computed(() => last.value?.colors ?? props.resolved);
 
 function value(key: ColorKey): string {
@@ -70,29 +81,41 @@ function isDefault(key: ColorKey): boolean {
   return typeof edits.value[key] !== "string" && (edits.value[key] === null || !(key in props.config));
 }
 
+/** An unset header text follows the header (white or dark by contrast) once one is set. */
+function isAutomatic(key: ColorKey): boolean {
+  return key === "header_text" && !isDefault("header");
+}
+
 let timer: ReturnType<typeof setTimeout> | undefined;
 let request = 0;
 
 function schedule(): void {
   clearTimeout(timer);
+  request++; // a response still on its way is for older edits
   timer = setTimeout(refresh, 150);
 }
 
 async function refresh(): Promise<void> {
   const mine = ++request;
+  // Malformed edits stay out (a configured key keeps its value meanwhile).
+  const valid = Object.fromEntries(
+    Object.entries(edits.value).filter(([, v]) => v === null || HEX.test(v)),
+  );
+  const sent = { ...props.config, ...valid };
   try {
-    const result = await previewColors({ ...props.config, ...edits.value });
+    const result = await previewColors(sent);
     if (mine !== request) return; // a newer edit is on its way
     last.value = result;
-    invalid.value = {};
+    rejected.value = {};
     failure.value = null;
     emit("preview", changed.value ? result.colors : null);
   } catch (e) {
     if (mine !== request) return;
-    // Keep the last good preview; mark the key the server named.
+    // Keep the last good preview; mark the key the server named, else show the message.
     const message = e instanceof Error ? e.message : String(e);
-    const key = (Object.keys(JSON_KEY) as ColorKey[]).find((k) => message.includes(`'${k}'`));
-    invalid.value = key ? { [key]: message } : {};
+    // Only a key with a row can be marked; anything else shows as a message.
+    const key = e instanceof ColorPreviewError && e.key && e.key in JSON_KEY ? e.key : undefined;
+    rejected.value = key ? { [key]: message } : {};
     failure.value = key ? null : message;
   }
 }
@@ -120,8 +143,11 @@ function restore(key: ColorKey): void {
 }
 
 function reset(): void {
+  clearTimeout(timer);
+  request++; // drop a response still on its way
   edits.value = {};
-  invalid.value = {};
+  rejected.value = {};
+  failure.value = null;
   last.value = null;
   emit("preview", null);
   if (props.open) void refresh();
@@ -156,15 +182,22 @@ async function copy(): Promise<void> {
 watch(
   () => props.open,
   (open) => {
-    if (!open) return;
-    isDark.value = document.documentElement.classList.contains("dark");
-    void refresh();
+    if (open) void refresh();
   },
 );
 // The config's colours changed (pyproject.toml was edited): its values take over.
 watch(() => JSON.stringify(props.config), reset);
 
-onBeforeUnmount(() => clearTimeout(timer));
+// The dark-mode note follows the theme while the panel is open, too.
+const observer = new MutationObserver(() => {
+  isDark.value = document.documentElement.classList.contains("dark");
+});
+onMounted(() => observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] }));
+
+onBeforeUnmount(() => {
+  clearTimeout(timer);
+  observer.disconnect();
+});
 </script>
 
 <template>
@@ -218,6 +251,8 @@ onBeforeUnmount(() => clearTimeout(timer));
             :model-value="value(key)"
             size="sm"
             class="w-28 font-mono"
+            :class="{ 'opacity-60': isDefault(key) }"
+            :aria-label="`${label} (hex)`"
             :color="invalid[key] ? 'error' : undefined"
             :highlight="!!invalid[key]"
             :title="invalid[key]"
@@ -232,7 +267,7 @@ onBeforeUnmount(() => clearTimeout(timer));
             :aria-label="`Restore ${label} from pyproject.toml`"
             @click="restore(key)"
           />
-          <span v-else-if="isDefault(key)" class="text-xs text-dimmed">default</span>
+          <span v-else-if="isDefault(key)" class="text-xs text-dimmed">{{ isAutomatic(key) ? "automatic" : "default" }}</span>
           <UButton
             v-else
             icon="i-lucide-x"
