@@ -152,7 +152,9 @@ function baseline(top: number, height: number): number {
 .box__title {
   fill: var(--erd-header-text);
 }
-.box--enum .box__title {
+/* Not for foreign boxes: an enum shown as a foreign box keeps the muted title
+   (`.box--foreign .box__title` above). */
+.box--enum:not(.box--foreign) .box__title {
   fill: var(--erd-enum-title);
 }
 .box__name {

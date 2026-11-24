@@ -235,6 +235,7 @@ defineExpose({ fit, focus });
 </script>
 
 <template>
+  <!-- --brand-* (API colours) are mapped to the --erd-* roles in style.css, light mode only. -->
   <div
     class="erd-diagram relative h-full w-full overflow-hidden bg-muted"
     :style="{
