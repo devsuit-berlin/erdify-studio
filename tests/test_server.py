@@ -2,6 +2,7 @@
 
 import http.client
 import json
+import logging
 import socket
 import threading
 import time
@@ -124,6 +125,40 @@ def studio(tmp_path: Path) -> Iterator[Studio]:
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+def _config_warnings(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [
+        r.getMessage()
+        for r in caplog.records
+        if r.name == "erdify_studio._config" and r.levelno == logging.WARNING
+    ]
+
+
+def test_config_warnings_are_logged_once_while_serving(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    root = _project(tmp_path / "project")
+    pyproject = root / "pyproject.toml"
+    base = pyproject.read_text()
+    pyproject.write_text(base + '[tool.erdify-studio.colors]\nbackground = "#1e2129"\n')
+    caplog.set_level(logging.WARNING, logger="erdify_studio._config")
+    server = start_server(
+        _loader(root), static_dir=_static(tmp_path), display=_relative(root), min_interval=3600
+    )
+    try:
+        server.refresh()
+        server.refresh()
+        assert len(_config_warnings(caplog)) == 1
+        pyproject.write_text(base + '[tool.erdify-studio.colors]\nbackground = "#111111"\n')
+        server.refresh()
+        server.refresh()
+        assert len(_config_warnings(caplog)) == 2
+    finally:
+        server.server_close()
+    # Closed: the filter is gone, a plain load warns again.
+    _loader(root)()
+    assert len(_config_warnings(caplog)) == 3
 
 
 def _json(body: bytes) -> Any:

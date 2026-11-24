@@ -41,6 +41,7 @@ from erdify_studio._errors import LayoutConflictError, PositionsError, StudioErr
 from erdify_studio._export import build_studio, export_project, merge_studio, render_download
 
 logger = logging.getLogger(__name__)
+config_logger = logging.getLogger("erdify_studio._config")
 
 #: The built frontend shipped in the package.
 STATIC_DIR = Path(__file__).parent / "_static"
@@ -104,6 +105,23 @@ class Snapshot:
     error: str | None = None
 
 
+class _Once(logging.Filter):
+    """Passes each distinct log message once: the watcher reloads the config every tick."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._seen: set[str] = set()
+        self._lock = threading.Lock()
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        with self._lock:
+            if message in self._seen:
+                return False
+            self._seen.add(message)
+            return True
+
+
 class StudioServer(ThreadingHTTPServer):
     """The studio's HTTP server for one project.
 
@@ -139,11 +157,18 @@ class StudioServer(ThreadingHTTPServer):
         self._snapshot_lock = threading.Lock()
         self._stop = threading.Event()
         self._watcher: threading.Thread | None = None
-        started = clock()
-        project, config = load()  # the first load must succeed, as `check` would
-        self._snapshot = Snapshot(project, config, model_fingerprint(project, config))
-        self._load_seconds = clock() - started
-        super().__init__(("127.0.0.1", port), _Handler)
+        # Config warnings once per distinct message while the server lives, not per tick.
+        self._config_once = _Once()
+        config_logger.addFilter(self._config_once)
+        try:
+            started = clock()
+            project, config = load()  # the first load must succeed, as `check` would
+            self._snapshot = Snapshot(project, config, model_fingerprint(project, config))
+            self._load_seconds = clock() - started
+            super().__init__(("127.0.0.1", port), _Handler)
+        except BaseException:
+            config_logger.removeFilter(self._config_once)
+            raise
 
     @property
     def port(self) -> int:
@@ -196,6 +221,7 @@ class StudioServer(ThreadingHTTPServer):
 
     def server_close(self) -> None:
         self._stop_watcher()
+        config_logger.removeFilter(self._config_once)
         super().server_close()
 
     def _watch(self) -> None:
