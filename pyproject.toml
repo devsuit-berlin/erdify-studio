@@ -85,6 +85,12 @@ strict = true
 # scripts/check_instructions.py is vendored and kept as shipped.
 files = ["src", "tests", "scripts/check_wheel.py", "scripts/check_geometry.py"]
 
+# mkdocs is only in the docs group (tests/test_mkdocs_hook.py imports it). With full types:
+# `uv run --group docs mypy scripts/mkdocs_raw_html_urls.py tests/test_mkdocs_hook.py`.
+[[tool.mypy.overrides]]
+module = ["mkdocs", "mkdocs.*"]
+ignore_missing_imports = true
+
 [tool.ruff]
 line-length = 100
 indent-width = 4
