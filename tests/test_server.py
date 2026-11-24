@@ -564,8 +564,18 @@ def test_a_failed_export_after_save_is_a_warning(
     assert any("SVG export after save failed" in r.message for r in caplog.records)
 
 
-@pytest.mark.parametrize(("method", "path"), [("PUT", "/api/layout"), ("POST", "/api/svg")])
-def test_a_refused_request_closes_cleanly(studio: Studio, method: str, path: str) -> None:
+@pytest.mark.parametrize(
+    ("method", "path", "status"),
+    [
+        ("PUT", "/api/layout", 403),
+        ("POST", "/api/svg", 403),
+        ("GET", "/api/diagrams", 403),
+        ("DELETE", "/api/layout", 405),
+    ],
+)
+def test_a_refused_request_closes_cleanly(
+    studio: Studio, method: str, path: str, status: int
+) -> None:
     """The unread body of a refused request must not turn the close into a reset
     (Windows then aborts the client before it reads the 403)."""
     body = b"{" + b" " * 60000 + b"}"
@@ -582,7 +592,7 @@ def test_a_refused_request_closes_cleanly(studio: Studio, method: str, path: str
             if not chunk:
                 break
             received += chunk
-    assert received.startswith(b"HTTP/1.0 403") or received.startswith(b"HTTP/1.1 403")
+    assert received.startswith((f"HTTP/1.0 {status}".encode(), f"HTTP/1.1 {status}".encode()))
 
 
 # --- watcher and status (#7) -------------------------------------------------------
