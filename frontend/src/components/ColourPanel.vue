@@ -97,10 +97,11 @@ function schedule(): void {
 
 async function refresh(): Promise<void> {
   const mine = ++request;
-  // Malformed edits stay out; the server resolves the rest.
-  const sent = Object.fromEntries(
-    Object.entries({ ...props.config, ...edits.value }).filter(([, v]) => v === null || HEX.test(v)),
+  // Malformed edits stay out (a configured key keeps its value meanwhile).
+  const valid = Object.fromEntries(
+    Object.entries(edits.value).filter(([, v]) => v === null || HEX.test(v)),
   );
+  const sent = { ...props.config, ...valid };
   try {
     const result = await previewColors(sent);
     if (mine !== request) return; // a newer edit is on its way
@@ -112,7 +113,8 @@ async function refresh(): Promise<void> {
     if (mine !== request) return;
     // Keep the last good preview; mark the key the server named, else show the message.
     const message = e instanceof Error ? e.message : String(e);
-    const key = e instanceof ColorPreviewError ? e.key : undefined;
+    // Only a key with a row can be marked; anything else shows as a message.
+    const key = e instanceof ColorPreviewError && e.key && e.key in JSON_KEY ? e.key : undefined;
     rejected.value = key ? { [key]: message } : {};
     failure.value = key ? null : message;
   }
