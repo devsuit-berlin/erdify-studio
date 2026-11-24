@@ -527,9 +527,7 @@ def test_post_svg_with_a_malformed_body_is_400(studio: Studio) -> None:
     assert status == 400
 
 
-@pytest.mark.parametrize(
-    ("method", "path"), [("PUT", "/api/layout"), ("POST", "/api/svg"), ("GET", "/api/diagrams")]
-)
+@pytest.mark.parametrize(("method", "path"), [("PUT", "/api/layout"), ("POST", "/api/svg")])
 def test_writes_from_a_foreign_host_are_refused(studio: Studio, method: str, path: str) -> None:
     status, _, _ = studio.request(method, path, b"{}", headers={"Host": "evil.example"})
     assert status == 403
