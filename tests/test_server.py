@@ -585,6 +585,13 @@ def test_post_colors_errors(studio: Studio, payload: object, mentions: str) -> N
     assert mentions in _json(body)["error"]
 
 
+def test_post_colors_with_a_malformed_body_is_400(studio: Studio) -> None:
+    status, _, _ = studio.request(
+        "POST", "/api/colors", b"{", headers={"Content-Type": "application/json"}
+    )
+    assert status == 400
+
+
 def test_post_colors_needs_the_token(studio: Studio) -> None:
     status, _, _ = _post_colors(studio, {"colors": {}}, token=False)
     assert status == 403
