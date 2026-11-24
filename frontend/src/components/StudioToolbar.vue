@@ -1,5 +1,13 @@
 <script setup lang="ts">
-defineProps<{ title: string; dirty: boolean; saveable: boolean; saving: boolean; downloading: boolean }>();
+defineProps<{
+  title: string;
+  dirty: boolean;
+  saveable: boolean;
+  saving: boolean;
+  downloading: boolean;
+  // The canvas shows colours from the colour panel, not pyproject.toml's.
+  previewing: boolean;
+}>();
 defineEmits<{ save: []; download: []; colours: [] }>();
 
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -13,9 +21,10 @@ const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
     <UButton
       class="ml-auto"
       icon="i-lucide-palette"
-      label="Colours"
-      color="neutral"
-      variant="outline"
+      :label="previewing ? 'Colours · preview' : 'Colours'"
+      :color="previewing ? 'primary' : 'neutral'"
+      :variant="previewing ? 'soft' : 'outline'"
+      :title="previewing ? 'The canvas shows a colour preview; Download SVG uses pyproject.toml' : undefined"
       @click="$emit('colours')"
     />
     <UButton

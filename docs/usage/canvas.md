@@ -34,9 +34,12 @@ erdify's own, with crow's-foot ends.
 - **Colours** opens a panel to try [diagram colours](../configuration.md#diagram-colours)
   on the canvas: a picker and a hex field per key, grouped into Brand and Details. The
   canvas previews them right away (in light mode); nothing is written. **Copy TOML**
-  puts the matching `[tool.erdify-studio.colors]` table on the clipboard to paste into
-  `pyproject.toml`, **Reset** drops the panel's changes. When the colours in
-  `pyproject.toml` change, the panel starts over from them.
+  puts the whole `[tool.erdify-studio.colors]` table on the clipboard: replace the table
+  in `pyproject.toml` with it (it already holds the keys set there). **Reset** drops the
+  panel's changes; × steps a row back (an edit → the file's value → unset). While the
+  panel has changes, the Colours button says "preview": **Download SVG** keeps using
+  `pyproject.toml`. When the colours in `pyproject.toml` change, the panel starts over
+  from them.
 
 Like `check`, it exits 2 without starting when the canvas is not built (a source
 checkout without `uv run poe frontend`), when the project, its config or the layout

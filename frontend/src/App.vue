@@ -337,7 +337,7 @@ onBeforeUnmount(() => {
 <template>
   <UApp>
     <div class="flex h-screen flex-col">
-      <StudioToolbar :title="diagram?.label ?? 'Overview'" :dirty="dirty" :saveable="saveable" :saving="saving" :downloading="downloading" @save="save" @download="download" @colours="coloursOpen = !coloursOpen" />
+      <StudioToolbar :title="diagram?.label ?? 'Overview'" :dirty="dirty" :saveable="saveable" :saving="saving" :downloading="downloading" :previewing="previewed !== null" @save="save" @download="download" @colours="coloursOpen = !coloursOpen" />
       <UAlert
         v-if="serverGone"
         title="erdify-studio is not running any more."

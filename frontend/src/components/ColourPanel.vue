@@ -51,6 +51,8 @@ const edits = ref<Partial<Record<ColorKey, string | null>>>({});
 // The last good response: the colours shown and the TOML to copy.
 const last = ref<{ colors: ColorsJson; toml: string } | null>(null);
 const invalid = ref<Partial<Record<ColorKey, string>>>({});
+// An error that names no key (e.g. the server is gone).
+const failure = ref<string | null>(null);
 const isDark = ref(false);
 
 const changed = computed(() => Object.keys(edits.value).length > 0);
@@ -83,6 +85,7 @@ async function refresh(): Promise<void> {
     if (mine !== request) return; // a newer edit is on its way
     last.value = result;
     invalid.value = {};
+    failure.value = null;
     emit("preview", changed.value ? result.colors : null);
   } catch (e) {
     if (mine !== request) return;
@@ -90,6 +93,7 @@ async function refresh(): Promise<void> {
     const message = e instanceof Error ? e.message : String(e);
     const key = (Object.keys(JSON_KEY) as ColorKey[]).find((k) => message.includes(`'${k}'`));
     invalid.value = key ? { [key]: message } : {};
+    failure.value = key ? null : message;
   }
 }
 
@@ -98,11 +102,19 @@ function set(key: ColorKey, text: string): void {
   schedule();
 }
 
-/** Back to the config's value (or the default, for a key the config doesn't set). */
+/** One step back: an edit → the config's value (or the default); a configured key → unset. */
 function clear(key: ColorKey): void {
   const next = { ...edits.value };
+  if (key in next) delete next[key];
+  else next[key] = null;
+  edits.value = next;
+  schedule();
+}
+
+/** Undo "unset" on a configured key: back to the config's value. */
+function restore(key: ColorKey): void {
+  const next = { ...edits.value };
   delete next[key];
-  if (key in props.config) next[key] = null;
   edits.value = next;
   schedule();
 }
@@ -116,11 +128,26 @@ function reset(): void {
 }
 
 async function copy(): Promise<void> {
-  if (!last.value) await refresh();
-  if (!last.value) return;
+  // Copy what the panel shows: send a pending edit first, and never copy past a red row.
+  clearTimeout(timer);
+  await refresh();
+  const problem = Object.values(invalid.value)[0] ?? failure.value;
+  if (problem || !last.value) {
+    toast.add({
+      title: "Fix the marked colours first",
+      description: problem ?? undefined,
+      color: "error",
+      icon: "i-lucide-circle-alert",
+    });
+    return;
+  }
   try {
     await navigator.clipboard.writeText(last.value.toml);
-    toast.add({ title: "Copied the colours as TOML", description: "Paste them into pyproject.toml.", icon: "i-lucide-clipboard-check" });
+    toast.add({
+      title: "Copied the colours as TOML",
+      description: "Replace the [tool.erdify-studio.colors] table in pyproject.toml with it.",
+      icon: "i-lucide-clipboard-check",
+    });
   } catch {
     toast.add({ title: "Could not copy to the clipboard", color: "error", icon: "i-lucide-circle-alert" });
   }
@@ -159,6 +186,14 @@ onBeforeUnmount(() => clearTimeout(timer));
         title="The preview shows in light mode."
         class="mb-4"
       />
+      <UAlert
+        v-if="failure"
+        color="error"
+        variant="subtle"
+        icon="i-lucide-circle-alert"
+        :title="failure"
+        class="mb-4"
+      />
       <section v-for="group in GROUPS" :key="group.title" class="mb-6">
         <h3 class="mb-2 text-sm font-semibold text-muted">{{ group.title }}</h3>
         <div v-for="{ key, label } in group.keys" :key="key" class="mb-2 flex items-center gap-2">
@@ -188,7 +223,16 @@ onBeforeUnmount(() => clearTimeout(timer));
             :title="invalid[key]"
             @update:model-value="(v: string | number) => set(key, String(v))"
           />
-          <span v-if="isDefault(key)" class="text-xs text-dimmed">default</span>
+          <UButton
+            v-if="edits[key] === null"
+            icon="i-lucide-undo-2"
+            size="xs"
+            color="neutral"
+            variant="ghost"
+            :aria-label="`Restore ${label} from pyproject.toml`"
+            @click="restore(key)"
+          />
+          <span v-else-if="isDefault(key)" class="text-xs text-dimmed">default</span>
           <UButton
             v-else
             icon="i-lucide-x"
