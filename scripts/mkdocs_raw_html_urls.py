@@ -58,8 +58,8 @@ def _resolve_srcset(value: str, page: Page, files: Files) -> str:
     # "a.svg, b.svg 2x": each candidate is a URL plus an optional descriptor.
     candidates = []
     for candidate in value.split(","):
-        url, _, descriptor = candidate.strip().partition(" ")
-        candidates.append(f"{_resolve(url, page, files)} {descriptor}".rstrip())
+        url, *descriptor = candidate.split(None, 1)  # any whitespace before "2x"
+        candidates.append(" ".join([_resolve(url, page, files), *descriptor]))
     return ", ".join(candidates)
 
 

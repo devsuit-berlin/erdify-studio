@@ -24,6 +24,10 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version-file: .python-version
+      # The docs hook needs mkdocs, so its tests run here, not in the test matrix
+      # (they are skipped there).
+      - name: Test the docs hook
+        run: uv run --frozen --group docs poe test tests/test_mkdocs_hook.py --no-cov
       # --strict: a broken internal link fails the PR.
       - name: Build the site
         run: uv run --frozen --group docs mkdocs build --strict
