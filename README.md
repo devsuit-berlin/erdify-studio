@@ -10,12 +10,13 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-alpha-orange)
 [![PyPI](https://img.shields.io/pypi/v/erdify-studio)](https://pypi.org/project/erdify-studio/)
+[![Docs](https://img.shields.io/badge/docs-erdify--studio.devsuit.io-blue)](https://erdify-studio.devsuit.io/)
 [![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/devsuit-berlin/erdify-studio/badges/coverage.json)](https://github.com/devsuit-berlin/erdify-studio/actions/workflows/test.yml)
 
 Arrange your [erdify](https://github.com/devsuit-berlin/erdify) ERDs by drag and drop,
 commit the layout to your repo and check in CI that it stays up to date.
 
-**Documentation: <https://devsuit-berlin.github.io/erdify-studio/>**
+**Documentation: <https://erdify-studio.devsuit.io/>**
 
 > **Status: alpha.** `check`, `place --auto`, the canvas (overview and group diagrams,
 > live reload) and SVG export work. The layout file format is versioned; the Python API

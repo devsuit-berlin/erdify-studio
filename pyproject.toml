@@ -38,6 +38,7 @@ erdify-studio = "erdify_studio.cli:main"
 [project.urls]
 Homepage = "https://github.com/devsuit-berlin/erdify-studio"
 Repository = "https://github.com/devsuit-berlin/erdify-studio"
+Documentation = "https://erdify-studio.devsuit.io/"
 Changelog = "https://github.com/devsuit-berlin/erdify-studio/blob/main/CHANGELOG.md"
 Issues = "https://github.com/devsuit-berlin/erdify-studio/issues"
 
