@@ -20,6 +20,11 @@ Relative `layout` and `export_dir` paths resolve from the folder of `pyproject.t
 `[tool.erdify-studio]` is logged as a warning and ignored; a value of the wrong type, or
 a `group_by` that isn't one of the five, makes every command exit 2 with a message.
 
+erdify's own settings (`[tool.erdify]`: `include`, `sources`, `exclude`, `strict`,
+`no_enums`, `no_relationships`, `allow_empty`, …) decide which entities exist; see
+[erdify's documentation](https://erdify.devsuit.io/). erdify-studio reads the same
+`pyproject.toml`.
+
 ## Diagram colours
 
 ```toml
@@ -36,7 +41,7 @@ exported SVGs and **Download SVG**.
 | --- | ------- | ------- |
 | `accent` | PK/FK markers, the tint of the enum header, the selection on the canvas | `#615fff` |
 | `header` | Entity box header | `#e2e8f0` |
-| `header_text` | Entity box title | `#0f172b`; with only `header` set, white or `#0f172b`, whichever contrasts more with the header |
+| `header_text` | Entity box title | `#0f172b`; when `header` is set and `header_text` isn't, white or `#0f172b`, whichever contrasts more with the header |
 | `background` | Box bodies and the SVG background | `#ffffff` |
 
 - **Enum boxes** derive from these: the header is `accent` mixed 22 % into `background`,
@@ -51,8 +56,3 @@ exported SVGs and **Download SVG**.
 - Not yet: every colour configurable
   ([#67](https://github.com/devsuit-berlin/erdify-studio/issues/67)) and a colour
   preview in the UI ([#68](https://github.com/devsuit-berlin/erdify-studio/issues/68)).
-
-erdify's own settings (`[tool.erdify]`: `include`, `sources`, `exclude`, `strict`,
-`no_enums`, `no_relationships`, `allow_empty`, …) decide which entities exist; see
-[erdify's documentation](https://erdify.devsuit.io/). erdify-studio reads the same
-`pyproject.toml`.
