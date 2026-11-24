@@ -41,7 +41,7 @@ exported SVGs and **Download SVG**.
 
 | Key | Colours | Default |
 | --- | ------- | ------- |
-| `accent` | PK/FK markers, the tint of the enum header, the selection on the canvas | `#615fff` |
+| `accent` | PK/FK markers, the tint of the enum header, the selection and NEW chip on the canvas (chip text: white or `#0f172b` by contrast) | `#615fff` |
 | `header` | Entity box header | `#e2e8f0` |
 | `header_text` | Entity box title | `#0f172b`; when `header` is set and `header_text` isn't, white or `#0f172b`, whichever contrasts more with the header |
 | `background` | Box bodies and the SVG background | `#ffffff` |

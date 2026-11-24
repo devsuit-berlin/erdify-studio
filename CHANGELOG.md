@@ -11,12 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Configurable diagram colours: `[tool.erdify-studio.colors]` (`accent`, `header`,
   `header_text`, `background`, all optional `#rrggbb`) colours the canvas (light mode),
-  the exported SVGs and Download SVG. Enum boxes derive from them, a too-dark
-  `background` logs a warning, and changing colours makes committed SVGs outdated until
-  the next `export` or Save (#48). Every other diagram colour is configurable too:
-  `text`, `text_muted`, `border`, `border_strong`, `background_muted`; the contrast
-  warning checks `text` on `background`, and the canvas's NEW chip text follows the
-  accent (#67).
+  the exported SVGs and Download SVG. Enum boxes derive from them, low contrast between
+  `text` and `background` logs a warning, and changing colours makes committed SVGs
+  outdated until the next `export` or Save (#48). Every other diagram colour is
+  configurable too: `text`, `text_muted`, `border`, `border_strong`, `background_muted`;
+  the canvas's NEW chip text follows the accent (#67).
 
 ### Fixed
 
