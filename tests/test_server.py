@@ -675,6 +675,18 @@ def test_status_requires_the_token(studio: Studio) -> None:
     assert studio.request("GET", "/api/status", token=False)[0] == 403
 
 
+def test_status_reports_a_color_change(studio: Studio) -> None:
+    before = _status(studio)["model"]
+    (studio.root / "pyproject.toml").write_text(
+        '[tool.erdify]\ninclude = ["**/models.py"]\n'
+        '[tool.erdify-studio.colors]\naccent = "#4150aa"\n'
+    )
+    studio.server.refresh()
+    assert _status(studio)["model"] != before
+    _, _, body = studio.request("GET", "/api/diagrams")
+    assert _json(body)["colors"]["accent"] == "#4150aa"
+
+
 def test_a_refresh_changes_the_model_fingerprint(studio: Studio) -> None:
     before = _status(studio)["model"]
     (studio.root / "shop" / "models.py").write_text(MODELS + ORDER)
