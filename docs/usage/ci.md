@@ -17,7 +17,9 @@ browser, Node or network.
 
 With `export_dir` set and the layout up to date, `check` also exits 1 when an exported
 SVG is missing, out of date (e.g. a new column made a box taller) or stale (a group
-that no longer exists), one line each, and suggests `erdify-studio export`.
+that no longer exists), one line each, and suggests `erdify-studio export`. Changing
+the [diagram colours](../configuration.md#diagram-colours) makes the SVGs out of date
+too, until the next `export` or Save.
 
 In GitHub Actions (any CI works the same way — install, then run `check`):
 

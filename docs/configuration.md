@@ -7,6 +7,9 @@ group_by = "auto"                        # auto | schema | app | module | none
 export_dir = "docs/erd"                  # optional; omitted = no committed SVGs
 ```
 
+The diagram colours have their own table, `[tool.erdify-studio.colors]`: see
+[Diagram colours](#diagram-colours).
+
 `group_by = "auto"` picks, per entity, its database schema, else its Django app, else its
 Python module. Entities are keyed in the layout file by `schema.table` (or `table`), so
 renaming a class keeps its position; same-name tables in different schemas get their

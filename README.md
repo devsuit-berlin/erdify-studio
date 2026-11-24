@@ -28,17 +28,18 @@ No Node, no database, no browser engine needed.
 </p>
 
 > **Status: alpha.** `check`, `place --auto`, the canvas (overview and group diagrams,
-> live reload) and SVG export work. The layout file format is versioned; the Python API
+> live reload, the Colours panel), SVG export and configurable diagram colours work. The layout file format is versioned; the Python API
 > and the HTTP API between the canvas and the server may still change before 1.0.
 
 ## ✨ Features
 
-- 🖱️ **Drag & Drop Canvas** - Arrange the diagrams in your browser; the edges follow, Ctrl/⌘+S saves
+- 🖱️ **Drag & Drop Canvas** - Arrange the diagrams in your browser; the edges follow, Ctrl/⌘+S saves, Download SVG grabs the diagram on screen
 - 🗂️ **Group Diagrams** - An overview plus one diagram per schema, Django app or module, linked by foreign boxes
 - 💾 **Layout in Git** - One JSON file next to your code, keyed by `schema.table`, so renaming a class keeps its position
 - ✅ **Drift Check** - `erdify-studio check` fails CI/pre-commit when a table has no position or the layout holds stale entries
 - 📍 **Auto-Place** - `place --auto` puts new tables next to related ones and never moves a placed box
 - 🖼️ **SVG Export** - Byte-identical SVGs per diagram for your README and docs; `check` flags stale ones
+- 🎨 **Your Brand's Colours** - Set every diagram colour in `[tool.erdify-studio.colors]`, try them live in the canvas's Colours panel and copy them as TOML
 - 🔄 **Live Reload** - Edit your models and the canvas follows within about a second; unsaved drags are never lost
 - 🧬 **erdify's Own Model** - Every framework erdify reads, with erdify's entities and edges, never a re-implementation
 - 🔒 **Local Only** - Served on `127.0.0.1` with a per-session token; no CDN, fonts and icons ship in the wheel
@@ -85,6 +86,10 @@ Options come from erdify's `[tool.erdify]` in `pyproject.toml`, plus:
 layout = "docs/erd/erdify-layout.json"   # default: erdify-layout.json next to pyproject.toml
 group_by = "auto"                        # auto | schema | app | module | none
 export_dir = "docs/erd"                  # optional; omitted = no committed SVGs
+
+[tool.erdify-studio.colors]              # optional: your brand (nine keys, see the docs)
+accent = "#4150aa"
+header = "#192346"
 ```
 
 ## 🔄 How It Fits Together
@@ -103,11 +108,11 @@ flowchart LR
 
 - [Installation](https://erdify-studio.devsuit.io/installation/) — pip, the `[sql]` extra, Python and erdify versions
 - [Quickstart](https://erdify-studio.devsuit.io/quickstart/) — your first layout in a few steps
-- [The canvas](https://erdify-studio.devsuit.io/usage/canvas/) — group diagrams, foreign boxes, live reload, saving
+- [The canvas](https://erdify-studio.devsuit.io/usage/canvas/) — group diagrams, foreign boxes, live reload, saving, the Colours panel
 - [Check in CI & pre-commit](https://erdify-studio.devsuit.io/usage/ci/) — what `check` reports, exit codes, the pre-commit hook
 - [Place new tables](https://erdify-studio.devsuit.io/usage/place/) — how `place --auto` picks a spot
 - [Export SVGs](https://erdify-studio.devsuit.io/usage/export/) — file names, determinism, Download SVG
-- [Configuration](https://erdify-studio.devsuit.io/configuration/) — every `[tool.erdify-studio]` option and how entities are keyed
+- [Configuration](https://erdify-studio.devsuit.io/configuration/) — every `[tool.erdify-studio]` option, diagram colours, how entities are keyed
 - [The layout file](https://erdify-studio.devsuit.io/layout-file/) — the versioned JSON format
 - [Brand](https://erdify-studio.devsuit.io/brand/) — logo, colours and how to use them
 

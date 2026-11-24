@@ -16,6 +16,9 @@ keeps a committed diagram in sync with the models.
   SVG for your README and docs.
 - **Check** in CI or pre-commit that the layout (and the SVGs) still match the models;
   `place --auto` fixes it without a browser.
+- **Colour** the diagrams in your brand: set
+  [`[tool.erdify-studio.colors]`](configuration.md#diagram-colours), or try colours live
+  in the canvas's **Colours** panel and copy them as TOML.
 
 ```bash
 pip install erdify-studio
