@@ -56,6 +56,8 @@ _LOAD_ERRORS = (
 )
 #: Largest request body accepted, in bytes.
 MAX_BODY = 10 * 1024 * 1024
+#: Seconds a connection may stay silent (no request, or a body that doesn't arrive).
+REQUEST_TIMEOUT = 10
 
 _TOKEN_HEADER = "X-Studio-Token"
 #: The page loads nothing but its own files. Styles allow inline: Nuxt UI injects its
@@ -255,8 +257,33 @@ def start_server(
 
 class _Handler(BaseHTTPRequestHandler):
     server: StudioServer
-    #: Whether the current request's body was read (``_body`` or ``_drain``).
-    _body_read = False
+    #: Whether the current request's body was read (``_body`` or ``_drain``), i.e. there
+    #: is nothing left to drain. Per request: True until its headers are parsed.
+    _body_read = True
+    #: Socket timeout in seconds (applied by ``StreamRequestHandler.setup``): a client that
+    #: announces a body and never sends it, or never sends a request, doesn't hold its
+    #: thread forever. The stdlib logs it ("Request timed out") and closes the connection.
+    timeout = REQUEST_TIMEOUT
+
+    def handle_one_request(self) -> None:
+        # A new request (keep-alive): nothing of it to drain until its headers are parsed,
+        # so an error on its request line never drains by the previous request's headers.
+        self._body_read = True
+        super().handle_one_request()
+
+    def parse_request(self) -> bool:
+        parsed = super().parse_request()
+        if parsed:
+            self._body_read = False
+        return parsed
+
+    def send_error(self, code: int, message: str | None = None, explain: str | None = None) -> None:
+        # The stdlib answers methods without a do_* (HEAD, OPTIONS, ...) here with 501:
+        # read their body first, as _error does.
+        if not self._body_read:
+            self.close_connection = True
+            self._drain()
+        super().send_error(code, message, explain)
 
     # --- methods ------------------------------------------------------------------
 
@@ -278,7 +305,6 @@ class _Handler(BaseHTTPRequestHandler):
             self._static(path)
 
     def do_PUT(self) -> None:
-        self._body_read = False
         if not self._trusted():
             return
         if self.path.split("?", 1)[0] != "/api/layout":
@@ -287,7 +313,6 @@ class _Handler(BaseHTTPRequestHandler):
             self._save()
 
     def do_POST(self) -> None:
-        self._body_read = False
         if not self._trusted():
             return
         path = self.path.split("?", 1)[0]

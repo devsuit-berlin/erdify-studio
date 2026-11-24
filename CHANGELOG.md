@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`scripts/mkdocs_raw_html_urls.py`) resolves relative `src`/`srcset` in raw HTML for
   the page URL, and a broken one fails the strict build. The wordmark follows the site's
   light/dark toggle instead of the operating system's setting.
+- A refused HEAD or OPTIONS request with a body (answered 501) closes cleanly too, so
+  the client reads the response instead of a connection reset.
+- A connection that stays silent for 10 s (no request, or a body that never arrives
+  after its `Content-Length`) is closed instead of holding a server thread forever.
 
 ## [0.1.2] - 2026-11-24
 

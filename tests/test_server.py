@@ -15,7 +15,7 @@ import pytest
 
 from erdify_studio import OVERVIEW, StudioConfig, load_config, place_project
 from erdify_studio._diagrams import build_diagrams, layout_revision
-from erdify_studio._server import StudioServer, start_server
+from erdify_studio._server import StudioServer, _Handler, start_server
 
 MODELS = """\
 from sqlmodel import Field, SQLModel
@@ -571,6 +571,9 @@ def test_a_failed_export_after_save_is_a_warning(
         ("POST", "/api/svg", 403),
         ("GET", "/api/diagrams", 403),
         ("DELETE", "/api/layout", 405),
+        # No do_HEAD/do_OPTIONS: the stdlib answers 501 (#63).
+        ("HEAD", "/api/diagrams", 501),
+        ("OPTIONS", "/api/diagrams", 501),
     ],
 )
 def test_a_refused_request_closes_cleanly(
@@ -578,21 +581,71 @@ def test_a_refused_request_closes_cleanly(
 ) -> None:
     """The unread body of a refused request must not turn the close into a reset
     (Windows then aborts the client before it reads the 403)."""
-    body = b"{" + b" " * 60000 + b"}"
+    received = _exchange(studio, _raw_request(studio, method, path, _BIG_BODY))
+    assert received.startswith((f"HTTP/1.0 {status}".encode(), f"HTTP/1.1 {status}".encode()))
+
+
+_BIG_BODY = b"{" + b" " * 60000 + b"}"
+
+
+def _raw_request(
+    studio: Studio, method: str, path: str, body: bytes, *, token: bool = False, length: int = -1
+) -> bytes:
+    token_header = f"X-Studio-Token: {studio.server.token}\r\n" if token else ""
+    return (
+        f"{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{studio.port}\r\n{token_header}"
+        f"Content-Type: application/json\r\n"
+        f"Content-Length: {len(body) if length < 0 else length}\r\n\r\n"
+    ).encode() + body
+
+
+def _exchange(studio: Studio, data: bytes) -> bytes:
+    """Send raw request bytes, read until the server closes (a reset raises here)."""
     with socket.create_connection(("127.0.0.1", studio.port)) as sock:
-        sock.sendall(
-            f"{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{studio.port}\r\n"
-            f"Content-Type: application/json\r\nContent-Length: {len(body)}\r\n\r\n".encode()
-            + body
-        )
+        sock.settimeout(5)
+        sock.sendall(data)
         time.sleep(0.2)  # let the server answer and close
         received = b""
-        while True:
-            chunk = sock.recv(65536)  # a reset raises ConnectionResetError here
-            if not chunk:
-                break
+        while chunk := sock.recv(65536):  # a reset raises ConnectionResetError
             received += chunk
-    assert received.startswith((f"HTTP/1.0 {status}".encode(), f"HTTP/1.1 {status}".encode()))
+    return received
+
+
+def test_a_body_read_by_one_request_does_not_skip_draining_the_next(
+    studio: Studio, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#64: whether the body was read is per request, not per connection (keep-alive)."""
+    monkeypatch.setattr(_Handler, "protocol_version", "HTTP/1.1")
+    svg = json.dumps({"diagram": OVERVIEW, "positions": _diagrams(studio)[OVERVIEW]}).encode()
+    received = _exchange(
+        studio,
+        _raw_request(studio, "POST", "/api/svg", svg, token=True)
+        + _raw_request(studio, "GET", "/api/diagrams", _BIG_BODY),  # no token: refused
+    )
+    assert received.startswith(b"HTTP/1.1 200")
+    assert b"HTTP/1.1 403" in received
+
+
+def test_the_handler_has_a_socket_timeout() -> None:
+    """#62: set by default (the next test shortens it to see what it does)."""
+    assert _Handler.timeout is not None and 1 <= _Handler.timeout <= 60
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "token"),
+    [("PUT", "/api/layout", True), ("GET", "/api/diagrams", False)],
+)
+def test_a_body_that_never_arrives_times_out(
+    studio: Studio, monkeypatch: pytest.MonkeyPatch, method: str, path: str, token: bool
+) -> None:
+    """#62: a request announcing more body than it sends doesn't hold its thread forever:
+    an accepted one (read for JSON) and a refused one (drained)."""
+    monkeypatch.setattr(_Handler, "timeout", 0.3)
+    request = _raw_request(studio, method, path, b"{", token=token, length=100)
+    with socket.create_connection(("127.0.0.1", studio.port)) as sock:
+        sock.settimeout(5)  # without a server timeout, recv raises TimeoutError here
+        sock.sendall(request)
+        assert sock.recv(65536) == b""  # the server gave up and closed
 
 
 # --- watcher and status (#7) -------------------------------------------------------
