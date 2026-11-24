@@ -119,7 +119,7 @@ function baseline(top: number, height: number): number {
 }
 .box__frame {
   fill: none;
-  stroke: var(--ui-border-accented);
+  stroke: var(--erd-border-strong);
   stroke-width: 1;
 }
 .box--new .box__frame {
@@ -134,20 +134,20 @@ function baseline(top: number, height: number): number {
 }
 .box--foreign .box__body,
 .box--foreign .box__header {
-  fill: var(--ui-bg-muted);
+  fill: var(--erd-bg-muted);
 }
 .box--foreign .box__frame {
   stroke-dasharray: 4 3;
 }
 .box--foreign .box__title {
-  fill: var(--ui-text-muted);
+  fill: var(--erd-text-muted);
 }
 .box--highlighted .box__frame {
   stroke: var(--erd-primary);
   stroke-width: 3;
 }
 .box__divider {
-  stroke: var(--ui-border);
+  stroke: var(--erd-border);
 }
 .box__title {
   fill: var(--erd-header-text);
@@ -158,10 +158,10 @@ function baseline(top: number, height: number): number {
   fill: var(--erd-enum-title);
 }
 .box__name {
-  fill: var(--ui-text-highlighted);
+  fill: var(--erd-text);
 }
 .box__type {
-  fill: var(--ui-text-muted);
+  fill: var(--erd-text-muted);
 }
 .box__badge {
   fill: var(--erd-primary);
@@ -171,7 +171,7 @@ function baseline(top: number, height: number): number {
   fill: var(--erd-primary);
 }
 .box__chip-text {
-  fill: var(--ui-bg);
+  fill: var(--erd-accent-text);
 }
 text {
   user-select: none;

@@ -250,7 +250,7 @@ def _box(
     dash = ' stroke-dasharray="4 3"' if foreign else ""
     out += [
         "    </g>",
-        f'    <rect width="{w}" height="{h}" rx="6" fill="none" stroke="{palette.border_accented}" '
+        f'    <rect width="{w}" height="{h}" rx="6" fill="none" stroke="{palette.border_strong}" '
         f'stroke-width="1"{dash}/>',
         "  </g>",
     ]

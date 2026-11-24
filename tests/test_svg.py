@@ -257,6 +257,31 @@ def test_render_svg_uses_the_palette(tmp_path: Path) -> None:
     assert "<style" not in svg
 
 
+def test_render_svg_uses_every_configured_colour(tmp_path: Path) -> None:
+    payload = _payload(_project(tmp_path))
+    diagram = next(d for d in payload["diagrams"] if d["name"] == "core")
+    palette = resolve_palette(
+        text="#111111",
+        text_muted="#222222",
+        border="#333333",
+        border_strong="#444444",
+        background_muted="#555555",
+    )
+    svg = render_svg(diagram, payload["boxes"], payload["metrics"], palette)
+    ns = "{http://www.w3.org/2000/svg}"
+    root = ET.fromstring(svg)
+    box = next(g for g in root.iter() if g.get("data-key") == "core.customers")
+    texts = {t.text: t.get("fill") for t in box.iter(f"{ns}text")}
+    assert texts["email"] == "#111111"
+    assert "#222222" in texts.values()  # the field type
+    assert any(line.get("stroke") == "#333333" for line in box.iter(f"{ns}line"))
+    assert any(r.get("stroke") == "#444444" for r in box.iter(f"{ns}rect"))
+    foreign = next(g for g in root.iter() if g.get("data-key") == "billing.invoices")
+    assert next(r for r in foreign.iter(f"{ns}rect") if r.get("fill")).get("fill") == "#555555"
+    edges = [p for p in root.iter(f"{ns}path") if p.get("stroke") == "#222222"]
+    assert edges  # edges and their markers
+
+
 def test_the_enum_box_follows_the_header_colour_only_for_entities(tmp_path: Path) -> None:
     payload = _payload(_project(tmp_path))
     diagram = next(d for d in payload["diagrams"] if d["name"] == OVERVIEW)

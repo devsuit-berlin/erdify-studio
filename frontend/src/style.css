@@ -35,6 +35,12 @@
   --erd-box-bg: var(--ui-bg);
   --erd-enum-header: color-mix(in oklab, var(--erd-primary) 22%, var(--ui-bg));
   --erd-enum-title: var(--ui-text-highlighted);
+  --erd-text: var(--ui-text-highlighted);
+  --erd-text-muted: var(--ui-text-muted);
+  --erd-border: var(--ui-border);
+  --erd-border-strong: var(--ui-border-accented);
+  --erd-bg-muted: var(--ui-bg-muted);
+  --erd-accent-text: var(--ui-bg);
 }
 .dark {
   --erd-primary: oklch(67.3% 0.182 276.935);
@@ -49,4 +55,10 @@ html:not(.dark) .erd-diagram {
   --erd-box-bg: var(--brand-background);
   --erd-enum-header: var(--brand-enum-header);
   --erd-enum-title: var(--brand-enum-title);
+  --erd-text: var(--brand-text);
+  --erd-text-muted: var(--brand-text-muted);
+  --erd-border: var(--brand-border);
+  --erd-border-strong: var(--brand-border-strong);
+  --erd-bg-muted: var(--brand-background-muted);
+  --erd-accent-text: var(--brand-accent-text);
 }

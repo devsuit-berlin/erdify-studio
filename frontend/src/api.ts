@@ -74,18 +74,24 @@ export interface DiagramJson {
 }
 
 // The resolved light palette from [tool.erdify-studio.colors], as #rrggbb.
-export interface DiagramColors {
+export interface ColorsJson {
   accent: string;
   header: string;
   headerText: string;
   background: string;
   enumHeader: string;
   enumTitle: string;
+  text: string;
+  textMuted: string;
+  border: string;
+  borderStrong: string;
+  backgroundMuted: string;
+  accentText: string;
 }
 
 export interface Diagrams {
   metrics: Metrics;
-  colors: DiagramColors;
+  colors: ColorsJson;
   boxes: Record<string, BoxDef>;
   diagrams: DiagramJson[];
   revision: string | null;

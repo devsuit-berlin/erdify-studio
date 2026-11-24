@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
-import type { BoxDef, DiagramColors, DiagramJson, DrawnBox, Metrics, Position, View } from "../api";
+import type { BoxDef, ColorsJson, DiagramJson, DrawnBox, Metrics, Position, View } from "../api";
 import { FIT_MARGIN, MAX_ZOOM, MIN_ZOOM } from "../drawing";
 import { fanOffsets, type Rect } from "../geometry";
 import BoxNode from "./BoxNode.vue";
@@ -11,7 +11,7 @@ const props = defineProps<{
   boxes: Record<string, BoxDef>;
   diagram: DiagramJson;
   metrics: Metrics;
-  colors: DiagramColors;
+  colors: ColorsJson;
   positions: Record<string, Position>;
   newKeys: ReadonlySet<string>;
   projectPath: string;
@@ -245,6 +245,12 @@ defineExpose({ fit, focus });
       '--brand-background': colors.background,
       '--brand-enum-header': colors.enumHeader,
       '--brand-enum-title': colors.enumTitle,
+      '--brand-text': colors.text,
+      '--brand-text-muted': colors.textMuted,
+      '--brand-border': colors.border,
+      '--brand-border-strong': colors.borderStrong,
+      '--brand-background-muted': colors.backgroundMuted,
+      '--brand-accent-text': colors.accentText,
     }"
   >
     <svg

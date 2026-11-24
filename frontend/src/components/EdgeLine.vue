@@ -56,7 +56,7 @@ const markers = computed(() => {
 <style scoped>
 .edge__line {
   fill: none;
-  stroke: var(--ui-text-muted);
+  stroke: var(--erd-text-muted);
   stroke-width: 1.25;
 }
 .edge--dashed .edge__line {
@@ -68,8 +68,8 @@ const markers = computed(() => {
   stroke-width: 10;
 }
 .edge__circle {
-  fill: var(--ui-bg-muted);
-  stroke: var(--ui-text-muted);
+  fill: var(--erd-bg-muted);
+  stroke: var(--erd-text-muted);
   stroke-width: 1.25;
 }
 </style>

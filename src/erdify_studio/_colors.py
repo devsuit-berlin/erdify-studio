@@ -1,6 +1,6 @@
 """The diagram palette: configurable colours, derived colours and the colour maths.
 
-``DiagramColors`` holds the four colours a project may set; ``resolve_palette`` turns
+``DiagramColors`` holds the colours a project may set; ``resolve_palette`` turns
 them into the full ``Palette`` the SVG export and the canvas use. Derived colours are
 computed in OKLab (mixing) and by WCAG 2.x contrast (text on a coloured background).
 Colours are lowercase ``#rrggbb`` strings; callers normalise before calling.
@@ -31,6 +31,11 @@ class DiagramColors:
     header: str | None = None
     header_text: str | None = None
     background: str | None = None
+    text: str | None = None
+    text_muted: str | None = None
+    border: str | None = None
+    border_strong: str | None = None
+    background_muted: str | None = None
 
     def __post_init__(self) -> None:
         for field in fields(self):
@@ -48,7 +53,7 @@ class Palette:
     background: str
     background_muted: str
     border: str
-    border_accented: str
+    border_strong: str
     text: str
     text_muted: str
     accent: str
@@ -56,6 +61,8 @@ class Palette:
     header_text: str
     enum_header: str
     enum_title: str
+    #: Text on the accent (the canvas's NEW chip); not drawn in the export.
+    accent_text: str
 
 
 def _rgb(color: str) -> tuple[float, float, float]:
@@ -132,6 +139,11 @@ def resolve_palette(
     header: str | None = None,
     header_text: str | None = None,
     background: str | None = None,
+    text: str | None = None,
+    text_muted: str | None = None,
+    border: str | None = None,
+    border_strong: str | None = None,
+    background_muted: str | None = None,
 ) -> Palette:
     """The full palette for the given overrides (lowercase ``#rrggbb`` or ``None``)."""
     accent = accent or "#615fff"
@@ -144,27 +156,23 @@ def resolve_palette(
     enum_header = mix_oklab(accent, background, _ENUM_MIX)
     return Palette(
         background=background,
-        background_muted="#f8fafc",
-        border="#e2e8f0",
-        border_accented="#cad5e2",
-        text=_DARK_TEXT,
-        text_muted="#62748e",
+        background_muted=background_muted or "#f8fafc",
+        border=border or "#e2e8f0",
+        border_strong=border_strong or "#cad5e2",
+        text=text or _DARK_TEXT,
+        text_muted=text_muted or "#62748e",
         accent=accent,
         header=header,
         header_text=header_text,
         enum_header=enum_header,
         enum_title=readable_text(enum_header),
+        accent_text=readable_text(accent),
     )
 
 
 def palette_of(colors: DiagramColors) -> Palette:
     """The palette for a project's ``DiagramColors``."""
-    return resolve_palette(
-        accent=colors.accent,
-        header=colors.header,
-        header_text=colors.header_text,
-        background=colors.background,
-    )
+    return resolve_palette(**{f.name: getattr(colors, f.name) for f in fields(colors)})
 
 
 #: The canvas diagram's light theme (Nuxt UI tokens with neutral "slate" in

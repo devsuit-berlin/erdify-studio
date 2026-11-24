@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Literal, cast, get_args
 
@@ -21,8 +21,8 @@ DEFAULT_LAYOUT_NAME = "erdify-layout.json"
 
 _TABLE = "erdify-studio"
 _KEYS = ("layout", "group_by", "export_dir", "colors")
-_COLOR_KEYS = ("accent", "header", "header_text", "background")
-#: WCAG AA contrast for body text; a background below it makes field text hard to read.
+_COLOR_KEYS = tuple(f.name for f in fields(DiagramColors))
+#: WCAG AA contrast for body text; field text below it on the background is hard to read.
 _MIN_TEXT_CONTRAST = 4.5
 
 
@@ -123,12 +123,13 @@ def _colors_table(table: dict[str, object], source: str) -> DiagramColors:
                 f"got {value!r} in {source}"
             )
         values[key] = value.lower()
-    background = values.get("background")
-    if background is not None:
-        ratio = contrast(background, DEFAULT_PALETTE.text)
+    if "background" in values or "text" in values:
+        background = values.get("background", DEFAULT_PALETTE.background)
+        text = values.get("text", DEFAULT_PALETTE.text)
+        ratio = contrast(background, text)
         if ratio < _MIN_TEXT_CONTRAST:
             logger.warning(
-                f"[tool.{_TABLE}.colors] background {background!r} is too dark for the field "
-                f"text (contrast {ratio:.1f}:1, below {_MIN_TEXT_CONTRAST}:1) in {source}"
+                f"[tool.{_TABLE}.colors] text {text!r} on background {background!r} has too "
+                f"little contrast ({ratio:.1f}:1, below {_MIN_TEXT_CONTRAST}:1) in {source}"
             )
     return DiagramColors(**values)

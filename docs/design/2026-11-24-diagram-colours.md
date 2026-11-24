@@ -146,7 +146,7 @@ background = "#ffffff"   # box bodies and the SVG background
 
 ### Docs and release
 
-- `docs/usage/configuration.md`: the table, the four keys with roles and defaults, the
+- `docs/configuration.md`: the table, the four keys with roles and defaults, the
   `header_text` contrast rule, and the devsuit brand as an example.
 - The export page: changing colours makes the committed SVGs outdated, so `check` fails
   until the next export or Save, which is intended.
@@ -171,3 +171,19 @@ background = "#ffffff"   # box bodies and the SVG background
 - Names of the new dataclass, the palette function and the CSS variables.
 - Whether the colour maths lives in `_svg.py` or its own module.
 - How the canvas falls back while the first `/api/diagrams` response is loading.
+
+## Follow-up: every colour (#67, 2026-11-24)
+
+The user asked to make the remaining colours configurable without a fixed use case
+("I don't know yet"), so the simplest version was built:
+
+- Five more optional keys with today's values as defaults: `text`, `text_muted`,
+  `border`, `border_strong`, `background_muted` (Palette field `border_accented` renamed
+  `border_strong`). No output change without them.
+- Defaults don't adapt to a dark `background`; a dark theme sets the text colours too
+  (documented example). Automatic dark defaults can follow when a need shows up.
+- The contrast warning checks the configured `text` (else the default) on `background`.
+- The palette gains `accent_text` (white or `#0f172b` by contrast with `accent`) for the
+  canvas's NEW chip; the export doesn't draw it.
+- The API's `colors` gains `text`, `textMuted`, `border`, `borderStrong`,
+  `backgroundMuted`, `accentText`; the canvas maps them in light mode as before.
