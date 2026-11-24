@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   outdated until the next `export` or Save (#48). Every other diagram colour is
   configurable too: `text`, `text_muted`, `border`, `border_strong`, `background_muted`;
   the canvas's NEW chip text follows the accent (#67).
+- A **Colours** panel in studio previews diagram colours on the canvas without writing
+  anything and copies them as a `[tool.erdify-studio.colors]` table (**Copy TOML**). The
+  server resolves them (`POST /api/colors`); `GET /api/diagrams` gains `colorConfig`, the
+  keys set in `pyproject.toml` (#68).
 
 ### Fixed
 

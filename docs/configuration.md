@@ -70,5 +70,5 @@ exported SVGs and **Download SVG**.
   the table while studio runs updates the canvas within about a second.
 - Changing colours makes committed SVGs outdated: `check` reports them until the next
   `export` or Save (see [Export SVGs](usage/export.md)).
-- Not yet: a colour preview in the UI
-  ([#68](https://github.com/devsuit-berlin/erdify-studio/issues/68)).
+- To try colours before writing them down, use the **Colours** panel in studio (see
+  [The canvas](usage/canvas.md)): it previews them and copies the table as TOML.

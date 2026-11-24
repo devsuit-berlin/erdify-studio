@@ -12,6 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     BoxNode: typeof import('./src/components/BoxNode.vue')['default']
+    ColourPanel: typeof import('./src/components/ColourPanel.vue')['default']
     DiagramCanvas: typeof import('./src/components/DiagramCanvas.vue')['default']
     DiagramList: typeof import('./src/components/DiagramList.vue')['default']
     EdgeLine: typeof import('./src/components/EdgeLine.vue')['default']
@@ -20,5 +21,9 @@ declare module 'vue' {
     UApp: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/App.vue')['default']
     UBadge: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Badge.vue')['default']
     UButton: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Button.vue')['default']
+    UColorPicker: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/ColorPicker.vue')['default']
+    UInput: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Input.vue')['default']
+    UPopover: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Popover.vue')['default']
+    USlideover: typeof import('./node_modules/@nuxt/ui/dist/runtime/components/Slideover.vue')['default']
   }
 }

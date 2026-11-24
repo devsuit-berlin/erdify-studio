@@ -170,6 +170,18 @@ def resolve_palette(
     )
 
 
+def set_colors(colors: DiagramColors) -> dict[str, str]:
+    """The colours ``colors`` sets, in field order (unset ones left out)."""
+    return {f.name: v for f in fields(colors) if (v := getattr(colors, f.name)) is not None}
+
+
+def colors_toml(colors: DiagramColors) -> str:
+    """The ``[tool.erdify-studio.colors]`` table that sets ``colors``, as TOML text."""
+    lines = ["[tool.erdify-studio.colors]"]
+    lines += [f'{key} = "{value}"' for key, value in set_colors(colors).items()]
+    return "\n".join(lines) + "\n"
+
+
 def palette_of(colors: DiagramColors) -> Palette:
     """The palette for a project's ``DiagramColors``."""
     return resolve_palette(**{f.name: getattr(colors, f.name) for f in fields(colors)})

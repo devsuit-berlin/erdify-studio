@@ -9,12 +9,14 @@ import {
   saveLayout,
   Unreachable,
   type AllPositions,
+  type ColorsJson,
   type DiagramJson,
   type Diagrams,
   type Position,
   type View,
 } from "./api";
 import DiagramCanvas from "./components/DiagramCanvas.vue";
+import ColourPanel from "./components/ColourPanel.vue";
 import DiagramList from "./components/DiagramList.vue";
 import StudioToolbar from "./components/StudioToolbar.vue";
 
@@ -38,6 +40,9 @@ const moved = ref<Set<string>>(new Set());
 // Drags per diagram, so a save only clears the diagrams nothing moved in while it ran.
 const edits: Record<string, number> = {};
 const saving = ref(false);
+// The colour panel: open or not, and the colours it previews (null: the config's).
+const coloursOpen = ref(false);
+const previewed = ref<ColorsJson | null>(null);
 
 // Live reload: the server re-parses the models; the page polls what changed.
 const POLL_MS = 1000;
@@ -332,7 +337,7 @@ onBeforeUnmount(() => {
 <template>
   <UApp>
     <div class="flex h-screen flex-col">
-      <StudioToolbar :title="diagram?.label ?? 'Overview'" :dirty="dirty" :saveable="saveable" :saving="saving" :downloading="downloading" @save="save" @download="download" />
+      <StudioToolbar :title="diagram?.label ?? 'Overview'" :dirty="dirty" :saveable="saveable" :saving="saving" :downloading="downloading" :previewing="previewed !== null" @save="save" @download="download" @colours="coloursOpen = !coloursOpen" />
       <UAlert
         v-if="serverGone"
         title="erdify-studio is not running any more."
@@ -391,7 +396,7 @@ onBeforeUnmount(() => {
             :boxes="loaded.boxes"
             :diagram="diagram"
             :metrics="loaded.metrics"
-            :colors="loaded.colors"
+            :colors="previewed ?? loaded.colors"
             :positions="positions[current]"
             :new-keys="newKeys[current] ?? EMPTY"
             :project-path="loaded.projectPath"
@@ -404,6 +409,13 @@ onBeforeUnmount(() => {
           />
         </main>
       </div>
+      <ColourPanel
+        v-if="loaded"
+        v-model:open="coloursOpen"
+        :config="loaded.colorConfig"
+        :resolved="loaded.colors"
+        @preview="previewed = $event"
+      />
     </div>
   </UApp>
 </template>

@@ -25,7 +25,7 @@ import secrets
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -35,9 +35,15 @@ from urllib.parse import unquote
 import erdify
 from erdify import Project
 
+from erdify_studio._colors import HEX, DiagramColors, colors_toml, palette_of
 from erdify_studio._config import StudioConfig
 from erdify_studio._config import logger as config_logger
-from erdify_studio._diagrams import layout_revision, model_fingerprint, save_diagrams
+from erdify_studio._diagrams import (
+    colors_json,
+    layout_revision,
+    model_fingerprint,
+    save_diagrams,
+)
 from erdify_studio._errors import LayoutConflictError, PositionsError, StudioError
 from erdify_studio._export import build_studio, export_project, merge_studio, render_download
 
@@ -357,11 +363,13 @@ class _Handler(BaseHTTPRequestHandler):
         if not self._trusted():
             return
         path = self.path.split("?", 1)[0]
-        if path not in ("/api/svg", "/api/diagrams"):
+        if path not in ("/api/svg", "/api/diagrams", "/api/colors"):
             self._error(HTTPStatus.METHOD_NOT_ALLOWED, "method not allowed")
         elif self._authorized():
             if path == "/api/svg":
                 self._svg()
+            elif path == "/api/colors":
+                self._colors_preview()
             else:
                 self._merge()
 
@@ -504,6 +512,35 @@ class _Handler(BaseHTTPRequestHandler):
             self._internal_error()
         else:
             self._json(HTTPStatus.OK, merged)
+
+    def _colors_preview(self) -> None:
+        """The palette and the TOML text for the colours of the colour panel; writes nothing."""
+        payload = self._body()
+        if payload is None:
+            return
+        raw = payload.get("colors")
+        if not isinstance(raw, dict):
+            self._error(HTTPStatus.BAD_REQUEST, 'expected {"colors": {key: "#rrggbb" or null}}')
+            return
+        keys = {f.name for f in fields(DiagramColors)}
+        values: dict[str, str] = {}
+        for key, value in raw.items():
+            if key not in keys:
+                self._error(HTTPStatus.BAD_REQUEST, f"unknown colour key {key!r}")
+                return
+            if value is None:
+                continue
+            if not isinstance(value, str) or not HEX.fullmatch(value):
+                self._error(
+                    HTTPStatus.BAD_REQUEST, f'{key!r} must be a "#rrggbb" colour, got {value!r}'
+                )
+                return
+            values[key] = value.lower()
+        colors = DiagramColors(**values)
+        self._json(
+            HTTPStatus.OK,
+            {"colors": colors_json(palette_of(colors)), "toml": colors_toml(colors)},
+        )
 
     def _svg(self) -> None:
         """One diagram as SVG with the positions the page shows, as a download."""

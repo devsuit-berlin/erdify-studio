@@ -531,6 +531,82 @@ def test_a_failed_export_still_saves_the_layout(exporting: Studio) -> None:
     assert result["revision"] == layout_revision(path)
 
 
+# --- colour preview (#68) ----------------------------------------------------------
+
+
+def _post_colors(
+    studio: Studio, payload: object, **kwargs: Any
+) -> tuple[int, dict[str, str], bytes]:
+    headers = {"Content-Type": "application/json", **kwargs.pop("headers", {})}
+    return studio.request(
+        "POST", "/api/colors", json.dumps(payload).encode(), headers=headers, **kwargs
+    )
+
+
+def test_post_colors_resolves_and_formats(studio: Studio) -> None:
+    status, _, body = _post_colors(studio, {"colors": {"header": "#192346"}})
+    assert status == 200
+    result = _json(body)
+    assert result["colors"]["header"] == "#192346"
+    assert result["colors"]["headerText"] == "#ffffff"
+    assert result["colors"]["enumHeader"] == "#d8deff"
+    assert result["toml"] == '[tool.erdify-studio.colors]\nheader = "#192346"\n'
+
+
+def test_post_colors_lowercases(studio: Studio) -> None:
+    status, _, body = _post_colors(studio, {"colors": {"accent": "#4150AA"}})
+    assert status == 200
+    result = _json(body)
+    assert result["colors"]["accent"] == "#4150aa"
+    assert 'accent = "#4150aa"' in result["toml"]
+
+
+def test_post_colors_null_keeps_the_default(studio: Studio) -> None:
+    status, _, body = _post_colors(studio, {"colors": {"accent": None}})
+    assert status == 200
+    result = _json(body)
+    assert result["colors"]["accent"] == "#615fff"
+    assert result["toml"] == "[tool.erdify-studio.colors]\n"
+
+
+@pytest.mark.parametrize(
+    ("payload", "mentions"),
+    [
+        ({"colors": {"edge": "#000000"}}, "'edge'"),
+        ({"colors": {"accent": "#41"}}, "'#41'"),
+        ({"colors": {"accent": 1}}, "1"),
+        ({"colors": []}, "colors"),
+        ({}, "colors"),
+    ],
+)
+def test_post_colors_errors(studio: Studio, payload: object, mentions: str) -> None:
+    status, _, body = _post_colors(studio, payload)
+    assert status == 400
+    assert mentions in _json(body)["error"]
+
+
+def test_post_colors_with_a_malformed_body_is_400(studio: Studio) -> None:
+    status, _, _ = studio.request(
+        "POST", "/api/colors", b"{", headers={"Content-Type": "application/json"}
+    )
+    assert status == 400
+
+
+def test_post_colors_needs_the_token(studio: Studio) -> None:
+    status, _, _ = _post_colors(studio, {"colors": {}}, token=False)
+    assert status == 403
+
+
+def test_post_colors_writes_nothing(studio: Studio) -> None:
+    def files() -> dict[str, int]:
+        return {str(p): p.stat().st_mtime_ns for p in studio.root.rglob("*")}
+
+    before = files()
+    status, _, _ = _post_colors(studio, {"colors": {"accent": "#4150aa"}})
+    assert status == 200
+    assert files() == before
+
+
 # --- download one diagram as SVG ---------------------------------------------------
 
 

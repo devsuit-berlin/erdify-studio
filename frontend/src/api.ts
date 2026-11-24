@@ -89,6 +89,22 @@ export interface ColorsJson {
   accentText: string;
 }
 
+/** The keys of [tool.erdify-studio.colors], in the server's field order. */
+export const COLOR_KEYS = [
+  "accent",
+  "header",
+  "header_text",
+  "background",
+  "text",
+  "text_muted",
+  "border",
+  "border_strong",
+  "background_muted",
+] as const;
+export type ColorKey = (typeof COLOR_KEYS)[number];
+/** The keys set in pyproject.toml (lowercase #rrggbb). */
+export type ColorConfig = Partial<Record<ColorKey, string>>;
+
 export interface Diagrams {
   metrics: Metrics;
   colors: ColorsJson;
@@ -100,6 +116,7 @@ export interface Diagrams {
   projectPath: string;
   // export_dir as the UI shows it; null when nothing is exported.
   exportPath: string | null;
+  colorConfig: ColorConfig;
 }
 
 /** A box as one diagram draws it: a foreign box shows its title only. */
@@ -210,6 +227,21 @@ export async function saveLayout(
   }
   const { message, reason } = await errorBody(response);
   return { ok: false, conflict: response.status === 409, reason, message };
+}
+
+/** The palette and the TOML text for the colour panel's keys (null: the default). Writes nothing. */
+export async function previewColors(
+  colors: Partial<Record<ColorKey, string | null>>,
+): Promise<{ colors: ColorsJson; toml: string }> {
+  const response = await fetch("api/colors", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Studio-Token": token },
+    body: JSON.stringify({ colors }),
+  });
+  if (!response.ok) {
+    throw new Error(await errorMessage(response));
+  }
+  return (await response.json()) as { colors: ColorsJson; toml: string };
 }
 
 /** Download one diagram as SVG, drawn by the server with the positions the page shows. */
