@@ -1,9 +1,10 @@
 import logging
+import tomllib
 from pathlib import Path
 
 import pytest
 
-from erdify_studio import ConfigError, StudioConfig, StudioError, load_config
+from erdify_studio import ConfigError, DiagramColors, StudioConfig, StudioError, load_config
 
 
 def _pyproject(tmp_path: Path, table: str) -> Path:
@@ -103,3 +104,66 @@ def test_unreadable_pyproject_is_an_error(tmp_path: Path) -> None:
 
 def test_config_errors_share_the_package_base() -> None:
     assert issubclass(ConfigError, StudioError)
+
+
+def test_colors_default_to_none(tmp_path: Path) -> None:
+    assert load_config(_pyproject(tmp_path, "")).colors == DiagramColors()
+
+
+def test_colors_are_read_and_lowercased(tmp_path: Path) -> None:
+    pyproject = _pyproject(
+        tmp_path, '[tool.erdify-studio.colors]\naccent = "#4150AA"\nheader_text = "#FFFFFF"'
+    )
+    assert load_config(pyproject).colors == DiagramColors(accent="#4150aa", header_text="#ffffff")
+
+
+@pytest.mark.parametrize(
+    "value", ['"#fff"', '"fff"', '"#ffffff80"', '"red"', "123", '"#ffffff\\n"']
+)
+def test_invalid_colors_are_errors(tmp_path: Path, value: str) -> None:
+    pyproject = _pyproject(tmp_path, f"[tool.erdify-studio.colors]\naccent = {value}")
+    expected = tomllib.loads(f"v = {value}")["v"]
+    with pytest.raises(ConfigError) as error:
+        load_config(pyproject)
+    message = str(error.value)
+    assert "'accent'" in message
+    assert repr(expected) in message
+    assert "pyproject.toml" in message
+
+
+def test_colors_must_be_a_table(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match=r"'colors' must be a table"):
+        load_config(_pyproject(tmp_path, 'colors = "x"'))
+
+
+def test_unknown_color_keys_are_warned_about(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    pyproject = _pyproject(tmp_path, '[tool.erdify-studio.colors]\nborder = "#000000"')
+    with caplog.at_level(logging.WARNING, logger="erdify_studio"):
+        config = load_config(pyproject)
+    assert config.colors == DiagramColors()
+    assert "'border'" in caplog.text
+
+
+def test_a_dark_background_is_warned_about(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    dark = _pyproject(tmp_path, '[tool.erdify-studio.colors]\nbackground = "#1e2129"')
+    with caplog.at_level(logging.WARNING, logger="erdify_studio"):
+        load_config(dark)
+    assert [r.levelno for r in caplog.records] == [logging.WARNING]
+    assert "'#1e2129'" in caplog.text
+    assert "4.5" in caplog.text
+
+    caplog.clear()
+    light = _pyproject(tmp_path, '[tool.erdify-studio.colors]\nbackground = "#fdf6e3"')
+    with caplog.at_level(logging.WARNING, logger="erdify_studio"):
+        load_config(light)
+    assert caplog.records == []
+
+
+def test_diagram_colors_is_public() -> None:
+    import erdify_studio
+
+    assert "DiagramColors" in erdify_studio.__all__
